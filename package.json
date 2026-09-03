@@ -1,0 +1,39 @@
+{
+  "name": "@cloudcare/electron-native-adapter",
+  "version": "0.0.0-local",
+  "private": true,
+  "description": "Electron adapter for CloudCare native desktop RUM SDKs",
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "main": "main/index.cjs",
+  "exports": {
+    ".": "./main/index.cjs",
+    "./main": "./main/index.cjs",
+    "./preload/install": "./preload/install.cjs",
+    "./preload/standalone": "./preload/standalone.cjs"
+  },
+  "files": [
+    "README.md",
+    "core",
+    "main",
+    "preload",
+    "internal",
+    "platform"
+  ],
+  "scripts": {
+    "check:syntax": "node scripts/check-syntax.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "check": "npm run check:syntax && npm test"
+  },
+  "peerDependencies": {
+    "electron": "43.x"
+  },
+  "peerDependenciesMeta": {
+    "electron": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}
