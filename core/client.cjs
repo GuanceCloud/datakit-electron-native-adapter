@@ -55,7 +55,7 @@ async function createClient({
         reportError(onError, error);
       }
     });
-    if (attachAutomatically) {
+    if (attachAutomatically && adapter.autoAttachEnabled !== false) {
       const { app, BrowserWindow } = electron;
       if (typeof app?.on !== "function" || typeof app?.removeListener !== "function" ||
           typeof BrowserWindow?.getAllWindows !== "function") {

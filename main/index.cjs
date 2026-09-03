@@ -1,7 +1,7 @@
 "use strict";
 
 const { createClient } = require("../core/client.cjs");
-const { createWindowsAdapter } = require("../platform/win32/index.cjs");
+const { createNativeAdapter } = require("../internal/create-native-adapter.cjs");
 const { requireObject } = require("../internal/options.cjs");
 
 function loadElectron(electron) {
@@ -22,10 +22,7 @@ async function bootstrap({
   onNativeCommand,
 } = {}) {
   requireObject(native, "native");
-  if (process.platform !== "win32") {
-    throw new Error(`Electron Native Adapter does not yet support ${process.platform}.`);
-  }
-  const adapter = createWindowsAdapter(native, onError);
+  const adapter = createNativeAdapter(native, onError);
   return createClient({
     electron: loadElectron(electron),
     adapter,

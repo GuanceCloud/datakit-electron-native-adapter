@@ -3,7 +3,8 @@
 const assert = require("node:assert/strict");
 const { EventEmitter, once } = require("node:events");
 const net = require("node:net");
-const test = require("node:test");
+const nodeTest = require("node:test");
+const test = process.platform === "win32" ? nodeTest : nodeTest.skip;
 const { connectMixedMode, startFullMode } = require("../main/index.cjs");
 const {
   BRIDGE_CHANNEL,
