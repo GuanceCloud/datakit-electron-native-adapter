@@ -96,7 +96,7 @@ test("common client binds trusted WebContents to the Native Adapter contract", a
   const client = await createClient({
     electron: { ipcMain },
     adapter,
-    mode: "embedded",
+    mode: "managed",
     enableAppLaunch: false,
     onNativeCommand: (command) => commands.push(command),
   });
@@ -115,7 +115,7 @@ test("common client binds trusted WebContents to the Native Adapter contract", a
   }, "trusted");
   adapter.emitCommand({ type: "refresh-layout" });
 
-  assert.equal(client.mode, "embedded");
+  assert.equal(client.mode, "managed");
   assert.equal(client.capabilities.protocolVersion, PROTOCOL_VERSION);
   assert.deepEqual(client.capabilities.allowedWebViewHosts, ["app.example.com"]);
   assert.equal(adapter.calls.filter(([name]) => name === "register").length, 1);
@@ -146,7 +146,7 @@ test("malformed capabilities are rejected before IPC registration", async () => 
     createClient({
       electron: { ipcMain },
       adapter,
-      mode: "embedded",
+      mode: "managed",
       enableAppLaunch: false,
     }),
     /capability replay must be a boolean/,
@@ -168,7 +168,7 @@ test("autoAttach tracks existing and newly-created windows and cleans up", async
       BrowserWindow: { getAllWindows: () => [existing] },
     },
     adapter,
-    mode: "embedded",
+    mode: "managed",
     autoAttach: true,
     enableAppLaunch: false,
   });

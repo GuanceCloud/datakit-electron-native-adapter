@@ -1,3 +1,5 @@
 node_modules/
 *.tgz
 .npm-cache/
+native/darwin/.build/
+native/darwin/runtime/

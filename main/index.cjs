@@ -1,6 +1,7 @@
 "use strict";
 
 const { createClient } = require("../core/client.cjs");
+const { createDarwinAdapter } = require("../platform/darwin/index.cjs");
 const { createWindowsAdapter } = require("../platform/win32/index.cjs");
 const { requireObject } = require("../internal/options.cjs");
 
@@ -22,14 +23,20 @@ async function bootstrap({
   onNativeCommand,
 } = {}) {
   requireObject(native, "native");
-  if (process.platform !== "win32") {
+  const electronModule = loadElectron(electron);
+  let adapter;
+  let mode = native.mode;
+  if (process.platform === "win32") {
+    adapter = createWindowsAdapter(native, onError);
+  } else if (process.platform === "darwin") {
+    adapter = createDarwinAdapter(native, electronModule, onError);
+  } else {
     throw new Error(`Electron Native Adapter does not yet support ${process.platform}.`);
   }
-  const adapter = createWindowsAdapter(native, onError);
   return createClient({
-    electron: loadElectron(electron),
+    electron: electronModule,
     adapter,
-    mode: native.mode,
+    mode,
     autoAttach,
     enableAppLaunch,
     onError,
@@ -63,16 +70,35 @@ function startFullMode({
 }
 
 function connectMixedMode({
+  electron,
   ipcMain,
   pipeName,
   timeoutMs,
   retryDelayMs,
+  socketPath,
+  authenticationToken,
+  protocolVersion,
+  environment,
+  connectTimeoutMs,
   enableAppLaunch = true,
   onError,
 } = {}) {
+  const electronModule = electron || ipcMain
+    ? { ...(electron || {}), ipcMain: ipcMain || electron?.ipcMain }
+    : undefined;
   return bootstrap({
-    electron: { ipcMain },
-    native: { mode: "external", pipeName, timeoutMs, retryDelayMs },
+    electron: electronModule,
+    native: {
+      mode: "external",
+      pipeName,
+      timeoutMs,
+      retryDelayMs,
+      socketPath,
+      authenticationToken,
+      protocolVersion,
+      environment,
+      connectTimeoutMs,
+    },
     enableAppLaunch,
     onError,
   });

@@ -18,12 +18,22 @@
     "main",
     "preload",
     "internal",
-    "platform"
+    "platform",
+    "native/darwin/Package.swift",
+    "native/darwin/Package.resolved",
+    "native/darwin/README.md",
+    "native/darwin/NativeBridge",
+    "native/darwin/addon",
+    "native/darwin/scripts"
   ],
   "scripts": {
+    "build:native:macos": "node native/darwin/scripts/build-native.mjs",
+    "build:native:macos:universal": "node native/darwin/scripts/build-universal.mjs",
     "check:syntax": "node scripts/check-syntax.cjs",
+    "clean:native:macos": "node native/darwin/scripts/clean.mjs",
     "test": "node --test tests/*.test.cjs",
-    "check": "npm run check:syntax && npm test"
+    "check": "npm run check:syntax && npm test",
+    "verify:native:macos": "node native/darwin/scripts/verify-runtime.mjs"
   },
   "peerDependencies": {
     "electron": "43.x"
