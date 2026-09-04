@@ -17,6 +17,8 @@ const {
   requiredString,
 } = require("../../internal/options.cjs");
 
+const MAX_PENDING_INPUT_BYTES = 8 * 1024 * 1024;
+
 function mapNativeSettings(settings) {
   requireObject(settings, "native.settings");
   const applicationId = requiredString(settings.applicationId, "native.settings.applicationId");
@@ -136,7 +138,7 @@ function waitForReady(child, timeoutMs, onNativeOutput) {
   });
 }
 
-function stopChild(child, timeoutMs) {
+function stopChild(child, timeoutMs, closeInput = true) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise((resolve) => {
     let settled = false;
@@ -151,8 +153,10 @@ function stopChild(child, timeoutMs) {
       finish();
     }, timeoutMs);
     child.once("exit", finish);
-    if (child.stdin?.writable) child.stdin.end();
-    else finish();
+    if (closeInput) {
+      if (child.stdin?.writable) child.stdin.end();
+      else finish();
+    }
   });
 }
 
@@ -163,6 +167,8 @@ function createManagedProcessAdapter({
   stopTimeoutMs = 3_000,
   onError,
   onNativeOutput,
+  spawnProcess = spawn,
+  fileExists = fs.existsSync,
 } = {}) {
   const nativeDirectory = path.resolve(requiredString(directory, "native.directory"));
   const bridgePath = path.join(nativeDirectory, "guance_windows_electron_bridge.exe");
@@ -177,15 +183,46 @@ function createManagedProcessAdapter({
   let stopped;
   let transportFailure;
   let backpressured = false;
+  let endingInput = false;
+  let pendingInput = [];
+  let pendingInputBytes = 0;
 
   const failTransport = (error) => {
     if (stopping || transportFailure) return;
     transportFailure = error;
+    pendingInput = [];
+    pendingInputBytes = 0;
     reportError(onError, error);
   };
+  const finishInput = () => {
+    if (endingInput && !backpressured && pendingInput.length === 0 && child?.stdin?.writable) {
+      child.stdin.end();
+    }
+  };
+  const flushPendingInput = () => {
+    if (transportFailure || backpressured || !child?.stdin?.writable) return;
+    while (pendingInput.length > 0) {
+      const line = pendingInput.shift();
+      pendingInputBytes -= Buffer.byteLength(line, "utf8");
+      if (!child.stdin.write(line, "utf8")) {
+        backpressured = true;
+        return;
+      }
+    }
+    finishInput();
+  };
   const write = (line) => {
-    if (transportFailure || backpressured || !child?.stdin?.writable) {
+    if (transportFailure || endingInput || !child?.stdin?.writable) {
       throw new Error("The CloudCare Electron Bridge EXE is not writable.");
+    }
+    const bytes = Buffer.byteLength(line, "utf8");
+    if (backpressured || pendingInput.length > 0) {
+      if (pendingInputBytes + bytes > MAX_PENDING_INPUT_BYTES) {
+        throw new Error("The CloudCare Electron Bridge EXE input queue is full.");
+      }
+      pendingInput.push(line);
+      pendingInputBytes += bytes;
+      return;
     }
     if (!child.stdin.write(line, "utf8")) backpressured = true;
   };
@@ -193,12 +230,12 @@ function createManagedProcessAdapter({
   return {
     async start() {
       for (const requiredPath of [bridgePath, runtimePath]) {
-        if (!fs.existsSync(requiredPath)) {
+        if (!fileExists(requiredPath)) {
           throw new Error(`The installed native runtime is missing: ${requiredPath}`);
         }
       }
       ({ normalized, nativeEnvironment } = mapNativeSettings(settings));
-      child = spawn(bridgePath, [], {
+      child = spawnProcess(bridgePath, [], {
         cwd: nativeDirectory,
         windowsHide: true,
         stdio: ["pipe", "pipe", "pipe"],
@@ -215,7 +252,10 @@ function createManagedProcessAdapter({
         `CloudCare Electron Bridge EXE exited unexpectedly (code=${code}, signal=${signal}).`,
       )));
       child.stdin.on("error", failTransport);
-      child.stdin.on("drain", () => { backpressured = false; });
+      child.stdin.on("drain", () => {
+        backpressured = false;
+        flushPendingInput();
+      });
       return capabilities;
     },
     registerWebContents() {},
@@ -244,15 +284,24 @@ function createManagedProcessAdapter({
     onCommand: inactiveCommandSubscription,
     getState() {
       return Object.freeze({
-        writable: Boolean(!transportFailure && !backpressured && child?.stdin?.writable),
+        writable: Boolean(
+          !transportFailure &&
+          !endingInput &&
+          child?.stdin?.writable &&
+          pendingInputBytes < MAX_PENDING_INPUT_BYTES
+        ),
         backpressured,
+        pendingBytes: pendingInputBytes,
         failure: transportFailure,
       });
     },
     stop() {
       if (!stopped) {
         stopping = true;
-        stopped = stopChild(child, stopLimit);
+        endingInput = true;
+        flushPendingInput();
+        finishInput();
+        stopped = stopChild(child, stopLimit, false);
       }
       return stopped;
     },
@@ -260,6 +309,7 @@ function createManagedProcessAdapter({
 }
 
 module.exports = {
+  MAX_PENDING_INPUT_BYTES,
   createManagedProcessAdapter,
   mapNativeSettings,
 };
