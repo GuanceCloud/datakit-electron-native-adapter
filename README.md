@@ -2,7 +2,7 @@
 
 CloudCare's Electron Native Adapter connects the Browser RUM SDK running in an Electron Renderer to a CloudCare native desktop SDK.
 
-This package exposes a CommonJS JavaScript adapter and keeps generated native binaries out of Git and npm. The repository also owns the source and build chain for the macOS Node-API addon and Objective-C bridge under `native/darwin`. Build or install the matching runtime and pass its directory to the Electron-owned mode, or run the Windows native SDK in the host application and connect with external mode.
+This package exposes a CommonJS JavaScript adapter and keeps generated native binaries out of Git and npm. The repository also owns the source and build chain for the macOS Node-API addon and Objective-C bridge under `native/darwin`. Build or install the matching runtime and pass its directory to the Electron-owned mode, or run the native SDK in the host application and connect with external mode.
 
 ## Support status
 
@@ -47,7 +47,9 @@ await client.stop();
 
 Use the same `native.settings` object on macOS and Windows and select `managed` mode. The mode describes ownership: Electron starts and stops the Native SDK on both platforms, even though macOS uses an in-process Node-API addon while Windows uses a managed bridge process. Sampling settings remain in the cross-platform `0..1` range and are converted internally to the macOS Native SDK's `0..100` units.
 
-The shared settings surface is unchanged: endpoint settings (`datakitUrl`, or `datawayUrl` with `clientToken`), identity settings (`applicationId`, `service`, `environment`, `version`), RUM sampling (`sampleRate`), Logger settings (`loggingEnabled`, `loggingSampleRate`), Session Replay settings (`replayEnabled`, `replaySampleRate`, `replayPrivacy`), Trace settings (`traceEnabled`, `traceSampleRate`, `traceType`, `traceAllowedUrls`), and runtime settings (`cachePath`, `debug`, `httpTimeoutMs`). No separate macOS `sdk`, `rum`, `logger`, `trace`, or `sessionReplay` configuration API is required. The current macOS Native binding has no direct setter for `version`, `cachePath`, `traceAllowedUrls`, or `httpTimeoutMs`; those values remain accepted so applications can share one configuration object, while the packaged app supplies its bundle version to the Native SDK.
+The shared settings surface includes endpoint settings (`datakitUrl`, or `datawayUrl` with `clientToken`), identity settings (`applicationId`, `service`, `environment`, `version`), RUM settings (`sampleRate`, `actionTrackingEnabled`), Logger settings (`loggingEnabled`, `loggingSampleRate`), Session Replay settings (`replayEnabled`, `replaySampleRate`, `replayPrivacy`), Trace settings (`traceEnabled`, `traceSampleRate`, `traceType`, `traceAllowedUrls`), and runtime settings (`cachePath`, `debug`, `httpTimeoutMs`). In managed mode, `actionTrackingEnabled` maps to the Native SDK's automatic user Action collection; on macOS this is `FTRumConfig.enableTraceUserAction`, which includes Native launch Actions. The setting defaults to `false` when omitted, and no custom launch Action is sent by the adapter. No separate macOS `sdk`, `rum`, `logger`, `trace`, or `sessionReplay` configuration API is required. The current macOS Native binding has no direct setter for `version`, `cachePath`, `traceAllowedUrls`, or `httpTimeoutMs`; those values remain accepted so applications can share one configuration object, while the packaged app supplies its bundle version to the Native SDK.
+
+See [macOS managed settings mapping](docs/macos-managed-settings-mapping.md) for the complete field, conversion, and Native SDK property matrix.
 
 ```js
 const { bootstrap } = require("@cloudcare/electron-native-adapter");
@@ -63,6 +65,7 @@ const client = await bootstrap({
       service: "desktop-app",
       environment: "production",
       version: "1.0.0",
+      actionTrackingEnabled: true,
       loggingEnabled: true,
       replayEnabled: true,
       replayPrivacy: "mask-user-input",
@@ -86,9 +89,9 @@ npm run verify:native:macos
 
 The build writes `guance_electron.node`, `libGuanceElectronNative.dylib`, and the SDK resource bundle to `native/darwin/runtime`. That directory is ignored by Git and excluded from the npm tarball. `build:native:macos` builds only the current architecture for faster local iteration; the universal command builds both `arm64` and `x86_64`.
 
-## macOS Mixed Mode
+## macOS external mode
 
-In Mixed Mode, the Native host initializes the SDK and starts `FTElectronBridgeServer`. It then launches Electron with the socket path, authentication token, and protocol version in these environment variables:
+In external mode, the Native host initializes the SDK and starts `FTElectronBridgeServer`. It then launches Electron with the socket path, authentication token, and protocol version in these environment variables:
 
 - `GUANCE_ELECTRON_SOCKET_PATH`
 - `GUANCE_ELECTRON_AUTH_TOKEN`
@@ -98,12 +101,16 @@ Electron connects before creating its first `BrowserWindow`; no `native.settings
 
 ```js
 const { app, BrowserWindow } = require("electron");
-const { connectMixedMode } = require("@cloudcare/electron-native-adapter");
+const { bootstrap } = require("@cloudcare/electron-native-adapter");
 
 let client;
 
 app.whenReady().then(async () => {
-  client = await connectMixedMode();
+  client = await bootstrap({
+    electron: require("electron"),
+    native: { mode: "external" },
+    autoAttach: true,
+  });
   const window = new BrowserWindow({ /* include the adapter preload */ });
   client.attachWindow(window);
 });
@@ -113,11 +120,33 @@ app.once("before-quit", () => {
 });
 ```
 
-For tests or custom launchers, `connectMixedMode()` also accepts explicit `socketPath`, `authenticationToken`, `protocolVersion`, `connectTimeoutMs`, and `environment` options. Mixed Mode forwards Browser RUM and Session Replay records. Browser Logger configuration remains owned by the Native host and is not exposed by the current macOS WebView socket protocol.
+For tests or custom launchers, the external Native options also accept explicit `socketPath`, `authenticationToken`, `protocolVersion`, `connectTimeoutMs`, and `environment` values. External mode forwards Browser RUM and Session Replay records. Browser Logger configuration remains owned by the Native host and is not exposed by the current macOS WebView socket protocol.
 
 ## Preload integration
 
 Use `@cloudcare/electron-native-adapter/preload/install` when composing an existing preload, or `@cloudcare/electron-native-adapter/preload/standalone` as a sandbox-compatible standalone preload. Both expose only the narrow `FTWebViewJavascriptBridge` API required by Browser RUM; they do not expose arbitrary Electron IPC.
+
+## macOS examples
+
+The repository includes two complete OrbitDesk applications under `examples/macos`. Both retain a multi-page UI with actions, requests, errors, Session Replay, and multiple BrowserWindows:
+
+- `examples/macos/electron`: a pure Electron application owns the Native SDK through `bootstrap({ native: { mode: "managed", settings } })` and loads the runtime built under `native/darwin/runtime`. Renderer RUM data is forwarded through the Native SDK bridge, while the Apple SDK collects Native lifecycle and launch Actions automatically.
+- `examples/macos/native`: a Swift AppKit host owns the Native SDK and `FTElectronBridgeServer`; Electron connects through `bootstrap({ native: { mode: "external" } })`. Its Swift package fetches `datakit-ios` from GitHub at the exact `1.6.8-alpha.1` tag.
+
+```sh
+npm run example:macos:install
+cp examples/macos/electron/.env.example examples/macos/electron/.env
+cp examples/macos/native/.env.example examples/macos/native/.env
+
+# Electron owns the Native SDK.
+npm run build:native:macos
+npm run example:macos:managed
+
+# The Swift Native host owns the Native SDK.
+npm run example:macos:external
+```
+
+Use `npm run example:macos:smoke` for an automatic local startup check of both examples. The smoke command uses non-secret local placeholder configuration and exits after each Renderer and adapter are ready. See `examples/macos/README.md` for configuration and prerequisites.
 
 ## Local verification
 

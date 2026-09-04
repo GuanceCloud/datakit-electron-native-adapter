@@ -31,6 +31,10 @@
     "build:native:macos:universal": "node native/darwin/scripts/build-universal.mjs",
     "check:syntax": "node scripts/check-syntax.cjs",
     "clean:native:macos": "node native/darwin/scripts/clean.mjs",
+    "example:macos:external": "npm --prefix examples/macos/native run dev",
+    "example:macos:install": "ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm --prefix examples/macos/electron install --no-audit --no-fund && ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm --prefix examples/macos/native install --no-audit --no-fund",
+    "example:macos:managed": "npm --prefix examples/macos/electron run dev",
+    "example:macos:smoke": "npm --prefix examples/macos/electron run smoke && npm --prefix examples/macos/native run smoke",
     "test": "node --test tests/*.test.cjs",
     "check": "npm run check:syntax && npm test",
     "verify:native:macos": "node native/darwin/scripts/verify-runtime.mjs"

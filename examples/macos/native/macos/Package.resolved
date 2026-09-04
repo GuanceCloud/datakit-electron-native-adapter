@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "datakit-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/GuanceCloud/datakit-ios.git",
+      "state" : {
+        "revision" : "0c22c45ee35c8c3a37b128012e3c0bb71d5fec3a",
+        "version" : "1.6.8-alpha.1"
+      }
+    }
+  ],
+  "version" : 2
+}

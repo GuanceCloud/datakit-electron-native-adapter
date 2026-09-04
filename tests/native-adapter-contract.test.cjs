@@ -8,6 +8,7 @@ const test = require("node:test");
 const { createClient } = require("../core/client.cjs");
 const { BRIDGE_CHANNEL, PROTOCOL_VERSION } = require("../core/channels.cjs");
 const publicApi = require("../main/index.cjs");
+const { mapNativeSettings } = require("../platform/win32/managed-process.cjs");
 
 const CAPABILITIES = Object.freeze({
   protocolVersion: PROTOCOL_VERSION,
@@ -87,6 +88,26 @@ test("public package exposes bootstrap and only supported subpaths", () => {
   assert.equal(typeof publicApi.bootstrap, "function");
   assert.equal(typeof publicApi.startFullMode, "function");
   assert.equal(typeof publicApi.connectMixedMode, "function");
+});
+
+test("shared Native action tracking setting maps to Windows managed configuration", () => {
+  const baseSettings = {
+    applicationId: "electron-app",
+    datakitUrl: "http://127.0.0.1:9529",
+    service: "desktop-app",
+    environment: "production",
+    version: "1.0.0",
+  };
+  assert.equal(
+    mapNativeSettings({ ...baseSettings, actionTrackingEnabled: true })
+      .nativeEnvironment.GUANCE_RUM_NATIVE_ACTION_TRACKING_ENABLED,
+    "1",
+  );
+  assert.equal(
+    mapNativeSettings({ ...baseSettings, actionTrackingEnabled: false })
+      .nativeEnvironment.GUANCE_RUM_NATIVE_ACTION_TRACKING_ENABLED,
+    "0",
+  );
 });
 
 test("common client binds trusted WebContents to the Native Adapter contract", async () => {

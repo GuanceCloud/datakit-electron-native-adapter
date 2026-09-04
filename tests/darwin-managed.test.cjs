@@ -23,6 +23,7 @@ function settings(overrides = {}) {
     environment: "production",
     version: "1.0.0",
     sampleRate: 0.75,
+    actionTrackingEnabled: true,
     loggingEnabled: true,
     loggingSampleRate: 0.5,
     replayEnabled: true,
@@ -134,12 +135,34 @@ function fakeWindow(id = 41) {
 
 test("macOS settings map to the existing Native API without changing public units", () => {
   const mapped = nativeConfigurations(normalizeNativeSettings(settings()));
+  assert.equal(nativeSampling(0), 0);
   assert.equal(nativeSampling(0.755), 76);
-  assert.equal(nativeTraceType("w3c_traceparent"), "traceparent");
+  assert.equal(nativeSampling(1), 100);
+  for (const [publicType, nativeType] of Object.entries({
+    ddtrace: "ddTrace",
+    zipkin: "zipkinMulti",
+    zipkin_multi: "zipkinMulti",
+    zipkin_single_header: "zipkinSingle",
+    w3c_traceparent: "traceparent",
+    skywalking_v3: "skywalking",
+    jaeger: "jaeger",
+  })) {
+    assert.equal(nativeTraceType(publicType), nativeType);
+  }
   assert.deepEqual(sessionReplayPrivacy("allow"), {
     touchPrivacy: "show",
     textAndInputPrivacy: "maskSensitiveInputs",
     imagePrivacy: "maskNone",
+  });
+  assert.deepEqual(sessionReplayPrivacy("mask-user-input"), {
+    touchPrivacy: "show",
+    textAndInputPrivacy: "maskAllInputs",
+    imagePrivacy: "maskNonBundledOnly",
+  });
+  assert.deepEqual(sessionReplayPrivacy("mask"), {
+    touchPrivacy: "hide",
+    textAndInputPrivacy: "maskAll",
+    imagePrivacy: "maskAll",
   });
   assert.deepEqual(mapped.sdk, {
     datakitUrl: "http://127.0.0.1:9529",
@@ -153,12 +176,38 @@ test("macOS settings map to the existing Native API without changing public unit
   assert.deepEqual(mapped.rum, {
     appId: "electron-app",
     sampleRate: 75,
+    enableTraceUserAction: true,
     enableTraceWebView: true,
   });
-  assert.equal(mapped.logger.sampleRate, 50);
-  assert.equal(mapped.trace.sampleRate, 80);
-  assert.equal(mapped.replay.sampleRate, 25);
-  assert.equal(mapped.replay.textAndInputPrivacy, "maskAllInputs");
+  assert.equal(
+    nativeConfigurations(normalizeNativeSettings(settings({
+      actionTrackingEnabled: false,
+    }))).rum.enableTraceUserAction,
+    false,
+  );
+  assert.equal(
+    nativeConfigurations(normalizeNativeSettings(settings({
+      actionTrackingEnabled: undefined,
+    }))).rum.enableTraceUserAction,
+    false,
+  );
+  assert.deepEqual(mapped.logger, {
+    sampleRate: 50,
+    enableCustomLog: true,
+    enableLinkRumData: true,
+  });
+  assert.deepEqual(mapped.trace, {
+    sampleRate: 80,
+    traceType: "traceparent",
+    enableAutoTrace: true,
+    enableLinkRumData: true,
+  });
+  assert.deepEqual(mapped.replay, {
+    sampleRate: 25,
+    touchPrivacy: "show",
+    textAndInputPrivacy: "maskAllInputs",
+    imagePrivacy: "maskNonBundledOnly",
+  });
   assert.deepEqual(
     nativeConfigurations(normalizeNativeSettings(settings({
       datakitUrl: "",
@@ -208,12 +257,13 @@ test("macOS managed adapter owns Native startup, Browser forwarding, and shutdow
   const nativeCommands = [];
   const adapter = createManagedAdapter({ settings: settings(), binding });
   const capabilities = await adapter.start();
-  assert.deepEqual(binding.invocations.map(({ method }) => method), [
-    "sdk.initialize",
-    "rum.configure",
-    "logger.configure",
-    "trace.configure",
-    "sessionReplay.configure",
+  const expected = nativeConfigurations(normalizeNativeSettings(settings()));
+  assert.deepEqual(binding.invocations, [
+    { method: "sdk.initialize", payload: expected.sdk },
+    { method: "rum.configure", payload: expected.rum },
+    { method: "logger.configure", payload: expected.logger },
+    { method: "trace.configure", payload: expected.trace },
+    { method: "sessionReplay.configure", payload: expected.replay },
   ]);
   assert.deepEqual(capabilities, {
     protocolVersion: PROTOCOL_VERSION,
@@ -284,6 +334,31 @@ test("macOS managed adapter owns Native startup, Browser forwarding, and shutdow
   assert.equal(binding.invocations.filter(({ method }) => method === "sdk.shutdown").length, 1);
   assert.equal(adapter.getState().writable, false);
   assert.equal(binding.commandHandlers.at(-1), null);
+});
+
+test("macOS managed feature flags control optional Native configuration", async () => {
+  const binding = new FakeBinding();
+  const adapter = createManagedAdapter({
+    settings: settings({
+      actionTrackingEnabled: false,
+      loggingEnabled: false,
+      replayEnabled: false,
+      traceEnabled: false,
+    }),
+    binding,
+  });
+  const capabilities = await adapter.start();
+
+  assert.deepEqual(binding.invocations.map(({ method }) => method), [
+    "sdk.initialize",
+    "rum.configure",
+  ]);
+  assert.equal(binding.invocations[1].payload.enableTraceUserAction, false);
+  assert.equal(capabilities.log, false);
+  assert.equal(capabilities.replay, false);
+  assert.equal(capabilities.trace, false);
+
+  await adapter.stop();
 });
 
 test("public bootstrap selects macOS managed Full Mode and preserves the client", {

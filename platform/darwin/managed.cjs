@@ -123,6 +123,7 @@ function nativeConfigurations(settings) {
     rum: Object.freeze({
       appId: settings.applicationId,
       sampleRate: nativeSampling(settings.sampleRate),
+      enableTraceUserAction: settings.actionTrackingEnabled,
       enableTraceWebView: true,
     }),
     logger: Object.freeze({
