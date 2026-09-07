@@ -41,7 +41,7 @@ client.attachWindow(window);
 await client.stop();
 ```
 
-Use `datawayUrl` with `clientToken` instead of `datakitUrl` when reporting through DataWay. Sampling settings use the cross-platform `0..1` range. See the [macOS managed settings mapping](docs/macos-managed-settings-mapping.md) for how the shared settings are applied by the Apple Native SDK.
+Use `datawayUrl` with `clientToken` instead of `datakitUrl` when reporting through DataWay. Sampling settings use the cross-platform `0..1` range.
 
 `bootstrap()` returns one client with normalized `capabilities`, `attachWindow()`, `detachWindow()`, `updateWindow()`, `transportState`, and idempotent `stop()` methods.
 
