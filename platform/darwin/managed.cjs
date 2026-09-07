@@ -43,11 +43,8 @@ function assertNativeBinding(binding) {
 function loadNativeBinding(directory) {
   const nativeDirectory = path.resolve(requiredString(directory, "native.directory"));
   const addonPath = path.join(nativeDirectory, "guance_electron.node");
-  const dylibPath = path.join(nativeDirectory, "libGuanceElectronNative.dylib");
-  for (const requiredPath of [addonPath, dylibPath]) {
-    if (!fs.existsSync(requiredPath)) {
-      throw new Error(`The installed macOS native runtime is missing: ${requiredPath}`);
-    }
+  if (!fs.existsSync(addonPath)) {
+    throw new Error(`The installed macOS native runtime is missing: ${addonPath}`);
   }
   const bundles = fs.readdirSync(nativeDirectory, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name.endsWith(".bundle"));
@@ -123,7 +120,6 @@ function nativeConfigurations(settings) {
     rum: Object.freeze({
       appId: settings.applicationId,
       sampleRate: nativeSampling(settings.sampleRate),
-      enableTraceUserAction: settings.actionTrackingEnabled,
       enableTraceWebView: true,
     }),
     logger: Object.freeze({

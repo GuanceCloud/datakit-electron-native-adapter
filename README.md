@@ -2,7 +2,7 @@
 
 CloudCare's Electron Native Adapter connects the Browser RUM SDK running in an Electron Renderer to a CloudCare native desktop SDK.
 
-This package exposes a CommonJS JavaScript adapter and keeps generated native binaries out of Git and npm. The repository also owns the source and build chain for the macOS Node-API addon and Objective-C bridge under `native/darwin`. Build or install the matching runtime and pass its directory to the Electron-owned mode, or run the native SDK in the host application and connect with external mode.
+This package exposes a CommonJS JavaScript adapter and keeps Native source and generated binaries out of npm. The Apple Native SDK repository owns the macOS Objective-C bridge and Objective-C++ Node-API addon source; this repository keeps only the JavaScript build orchestration under `native/darwin`. Build the matching runtime and pass its directory to the Electron-owned mode, or run the native SDK in the host application and connect with external mode.
 
 ## Support status
 
@@ -47,7 +47,7 @@ await client.stop();
 
 Use the same `native.settings` object on macOS and Windows and select `managed` mode. The mode describes ownership: Electron starts and stops the Native SDK on both platforms, even though macOS uses an in-process Node-API addon while Windows uses a managed bridge process. Sampling settings remain in the cross-platform `0..1` range and are converted internally to the macOS Native SDK's `0..100` units.
 
-The shared settings surface includes endpoint settings (`datakitUrl`, or `datawayUrl` with `clientToken`), identity settings (`applicationId`, `service`, `environment`, `version`), RUM settings (`sampleRate`, `actionTrackingEnabled`), Logger settings (`loggingEnabled`, `loggingSampleRate`), Session Replay settings (`replayEnabled`, `replaySampleRate`, `replayPrivacy`), Trace settings (`traceEnabled`, `traceSampleRate`, `traceType`, `traceAllowedUrls`), and runtime settings (`cachePath`, `debug`, `httpTimeoutMs`). In managed mode, `actionTrackingEnabled` maps to the Native SDK's automatic user Action collection; on macOS this is `FTRumConfig.enableTraceUserAction`, which includes Native launch Actions. The setting defaults to `false` when omitted, and no custom launch Action is sent by the adapter. No separate macOS `sdk`, `rum`, `logger`, `trace`, or `sessionReplay` configuration API is required. The current macOS Native binding has no direct setter for `version`, `cachePath`, `traceAllowedUrls`, or `httpTimeoutMs`; those values remain accepted so applications can share one configuration object, while the packaged app supplies its bundle version to the Native SDK.
+The shared settings surface includes endpoint settings (`datakitUrl`, or `datawayUrl` with `clientToken`), identity settings (`applicationId`, `service`, `environment`, `version`), RUM settings (`sampleRate`), Logger settings (`loggingEnabled`, `loggingSampleRate`), Session Replay settings (`replayEnabled`, `replaySampleRate`, `replayPrivacy`), Trace settings (`traceEnabled`, `traceSampleRate`, `traceType`, `traceAllowedUrls`), and runtime settings (`cachePath`, `debug`, `httpTimeoutMs`). No separate macOS `sdk`, `rum`, `logger`, `trace`, or `sessionReplay` configuration API is required. The current macOS Native binding has no direct setter for `version`, `cachePath`, `traceAllowedUrls`, or `httpTimeoutMs`; those values remain accepted so applications can share one configuration object, while the packaged app supplies its bundle version to the Native SDK.
 
 See [macOS managed settings mapping](docs/macos-managed-settings-mapping.md) for the complete field, conversion, and Native SDK property matrix.
 
@@ -65,7 +65,6 @@ const client = await bootstrap({
       service: "desktop-app",
       environment: "production",
       version: "1.0.0",
-      actionTrackingEnabled: true,
       loggingEnabled: true,
       replayEnabled: true,
       replayPrivacy: "mask-user-input",
@@ -76,18 +75,35 @@ const client = await bootstrap({
 });
 ```
 
-The runtime directory must contain `guance_electron.node`, `libGuanceElectronNative.dylib`, and the Native SDK resource bundle produced by the matching `ft-sdk-ios-macos-sessionreplay` release. Keep these files together and outside ASAR when packaging the Electron application. A manually attached macOS target must be a `BrowserWindow`, or a `WebContents` that Electron can resolve back to its host `BrowserWindow`, because Native registration requires `getNativeWindowHandle()`.
+### Native automatic Actions
+
+Automatic Native Action tracking is owned by the platform Native SDK, not by
+the Electron Adapter. `actionTrackingEnabled` is not a public
+`native.settings` field and is ignored if supplied. In managed mode, the
+Adapter does not send `enableTraceUserAction` on macOS or an equivalent
+configuration value on Windows, so each Native SDK keeps its own default
+behavior. The Adapter also does not send a custom Action to synthesize a launch
+Action.
+
+Applications that must explicitly control Native automatic Action tracking
+should use external mode and configure the platform Native SDK in the Native
+host before Electron connects.
+
+The runtime directory must contain `guance_electron.node` and the Native SDK resource bundle produced by the matching `ft-sdk-ios-macos-sessionreplay` release. Keep the runtime directory outside ASAR when packaging the Electron application. A manually attached macOS target must be a `BrowserWindow`, or a `WebContents` that Electron can resolve back to its host `BrowserWindow`, because Native registration requires `getNativeWindowHandle()`.
 
 ### Build the macOS runtime
 
-The Electron-specific Native source is stored in `native/darwin`. It builds against the `GuanceElectronWebView` SwiftPM product from `https://github.com/GuanceCloud/datakit-ios.git`, pinned to the exact `1.6.8-alpha.1` tag.
+The Electron-specific Native source and the static `GuanceElectronNative` SwiftPM product are stored in `https://github.com/GuanceCloud/datakit-ios.git`. The JavaScript build command fetches that repository at the exact `1.6.8-alpha.3` tag and compiles both SDK-owned Native layers. The static Native SDK product is linked into `guance_electron.node` with Objective-C Category loading enabled. The npm package contains no `.m`, `.mm`, `.h`, `.swift`, or local SwiftPM manifest.
 
 ```sh
+npm run build:native:macos:managed
 npm run build:native:macos:universal
 npm run verify:native:macos
 ```
 
-The build writes `guance_electron.node`, `libGuanceElectronNative.dylib`, and the SDK resource bundle to `native/darwin/runtime`. That directory is ignored by Git and excluded from the npm tarball. `build:native:macos` builds only the current architecture for faster local iteration; the universal command builds both `arm64` and `x86_64`.
+`build:native:macos` is an alias for a current-architecture managed build. The universal command builds both `arm64` and `x86_64`. During development of an unreleased Native SDK change, set `GUANCE_NATIVE_SDK_ROOT` to an existing checkout; this explicit override is not persisted as a package dependency. External mode has no Native build command because the Native host owns the SDK.
+
+The managed build writes `guance_electron.node`, the SDK resource bundle, and `runtime-manifest.json` to `native/darwin/runtime`. The Native SDK is statically linked into the addon, so no adjacent Guance dylib is required. That directory is ignored by Git and excluded from the npm tarball. See [the Darwin build contract](native/darwin/README.md) for source requirements and override options.
 
 ## macOS external mode
 
@@ -131,7 +147,7 @@ Use `@cloudcare/electron-native-adapter/preload/install` when composing an exist
 The repository includes two complete OrbitDesk applications under `examples/macos`. Both retain a multi-page UI with actions, requests, errors, Session Replay, and multiple BrowserWindows:
 
 - `examples/macos/electron`: a pure Electron application owns the Native SDK through `bootstrap({ native: { mode: "managed", settings } })` and loads the runtime built under `native/darwin/runtime`. Renderer RUM data is forwarded through the Native SDK bridge, while the Apple SDK collects Native lifecycle and launch Actions automatically.
-- `examples/macos/native`: a Swift AppKit host owns the Native SDK and `FTElectronBridgeServer`; Electron connects through `bootstrap({ native: { mode: "external" } })`. Its Swift package fetches `datakit-ios` from GitHub at the exact `1.6.8-alpha.1` tag.
+- `examples/macos/native`: a Swift AppKit host owns the Native SDK and `FTElectronBridgeServer`; Electron connects through `bootstrap({ native: { mode: "external" } })`. Its Swift package fetches `datakit-ios` from GitHub at the exact `1.6.8-alpha.3` tag.
 
 ```sh
 npm run example:macos:install
@@ -158,4 +174,4 @@ npm run check
 npm pack --dry-run --json
 ```
 
-Native EXE, DLL, Node-API addon, and dylib files are intentionally absent from the npm tarball.
+Native source, EXE, DLL, Node-API addon, static library, and SDK resource bundle files are intentionally absent from the npm tarball.

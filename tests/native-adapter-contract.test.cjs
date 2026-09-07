@@ -90,7 +90,7 @@ test("public package exposes bootstrap and only supported subpaths", () => {
   assert.equal(typeof publicApi.connectMixedMode, "function");
 });
 
-test("shared Native action tracking setting maps to Windows managed configuration", () => {
+test("removed Native action tracking setting is not forwarded to Windows managed", () => {
   const baseSettings = {
     applicationId: "electron-app",
     datakitUrl: "http://127.0.0.1:9529",
@@ -98,15 +98,11 @@ test("shared Native action tracking setting maps to Windows managed configuratio
     environment: "production",
     version: "1.0.0",
   };
+  const mapped = mapNativeSettings({ ...baseSettings, actionTrackingEnabled: true });
+  assert.equal("actionTrackingEnabled" in mapped.normalized, false);
   assert.equal(
-    mapNativeSettings({ ...baseSettings, actionTrackingEnabled: true })
-      .nativeEnvironment.GUANCE_RUM_NATIVE_ACTION_TRACKING_ENABLED,
-    "1",
-  );
-  assert.equal(
-    mapNativeSettings({ ...baseSettings, actionTrackingEnabled: false })
-      .nativeEnvironment.GUANCE_RUM_NATIVE_ACTION_TRACKING_ENABLED,
-    "0",
+    "GUANCE_RUM_NATIVE_ACTION_TRACKING_ENABLED" in mapped.nativeEnvironment,
+    false,
   );
 });
 

@@ -29,7 +29,6 @@ function mapNativeSettings(settings) {
       GUANCE_RUM_NATIVE_VERSION: normalized.version,
       GUANCE_RUM_NATIVE_CACHE_PATH: normalized.cachePath,
       GUANCE_RUM_NATIVE_SAMPLE_RATE: String(normalized.sampleRate),
-      GUANCE_RUM_NATIVE_ACTION_TRACKING_ENABLED: normalized.actionTrackingEnabled ? "1" : "0",
       GUANCE_RUM_NATIVE_LOG_ENABLED: normalized.loggingEnabled ? "1" : "0",
       GUANCE_RUM_NATIVE_LOG_SAMPLE_RATE: String(normalized.loggingSampleRate),
       GUANCE_RUM_NATIVE_SESSION_REPLAY_ENABLED: normalized.replayEnabled ? "1" : "0",

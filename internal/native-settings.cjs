@@ -30,7 +30,6 @@ function normalizeNativeSettings(settings) {
     version: requiredString(settings.version, "native.settings.version"),
     cachePath: optionalString(settings.cachePath, "native.settings.cachePath"),
     sampleRate: rate(settings.sampleRate, 1, "native.settings.sampleRate"),
-    actionTrackingEnabled: Boolean(settings.actionTrackingEnabled),
     loggingEnabled: Boolean(settings.loggingEnabled),
     loggingSampleRate: rate(settings.loggingSampleRate, 1, "native.settings.loggingSampleRate"),
     replayEnabled: Boolean(settings.replayEnabled),

@@ -14,20 +14,18 @@
   },
   "files": [
     "README.md",
+    "docs/macos-managed-settings-mapping.md",
     "core",
     "main",
     "preload",
     "internal",
     "platform",
-    "native/darwin/Package.swift",
-    "native/darwin/Package.resolved",
     "native/darwin/README.md",
-    "native/darwin/NativeBridge",
-    "native/darwin/addon",
     "native/darwin/scripts"
   ],
   "scripts": {
     "build:native:macos": "node native/darwin/scripts/build-native.mjs",
+    "build:native:macos:managed": "node native/darwin/scripts/build-native.mjs",
     "build:native:macos:universal": "node native/darwin/scripts/build-universal.mjs",
     "check:syntax": "node scripts/check-syntax.cjs",
     "clean:native:macos": "node native/darwin/scripts/clean.mjs",

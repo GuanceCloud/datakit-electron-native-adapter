@@ -8,50 +8,65 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const runtime = path.join(root, 'runtime')
 const addon = path.join(runtime, 'guance_electron.node')
 const dylib = path.join(runtime, 'libGuanceElectronNative.dylib')
+const manifestPath = path.join(runtime, 'runtime-manifest.json')
 
-for (const file of [addon, dylib]) {
+for (const file of [addon, manifestPath]) {
   if (!fs.existsSync(file)) throw new Error(`Native runtime is missing: ${file}`)
-  execFileSync('/usr/bin/lipo', [file, '-verify_arch', 'arm64', 'x86_64'])
-  execFileSync('/usr/bin/codesign', ['--verify', '--verbose=2', file], {
-    stdio: ['ignore', 'ignore', 'pipe'],
-  })
 }
+if (fs.existsSync(dylib)) {
+  throw new Error(`Static Native runtime must not contain: ${dylib}`)
+}
+
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+if (manifest.schemaVersion !== 1 ||
+    manifest.mode !== 'managed' ||
+    manifest.platform !== 'darwin' ||
+    manifest.nativeSDKLinkage !== 'static') {
+  throw new Error(`Invalid Native runtime manifest: ${manifestPath}`)
+}
+if (!Array.isArray(manifest.architectures) || manifest.architectures.length === 0) {
+  throw new Error('Native runtime manifest has no architectures')
+}
+execFileSync('/usr/bin/lipo', [addon, '-verify_arch', ...manifest.architectures])
+execFileSync('/usr/bin/codesign', ['--verify', '--verbose=2', addon], {
+  stdio: ['ignore', 'ignore', 'pipe'],
+})
 
 const bundles = fs.readdirSync(runtime, { withFileTypes: true })
   .filter((entry) => entry.isDirectory() && entry.name.endsWith('.bundle'))
 if (bundles.length === 0) {
   throw new Error(`Native runtime has no resource bundle: ${runtime}`)
 }
-if (fs.existsSync(path.join(runtime, 'swift-runtime'))) {
-  throw new Error('Objective-C runtime must not contain a Swift runtime directory')
-}
-
-const dylibDependencies = execFileSync('/usr/bin/otool', ['-L', dylib], {
-  encoding: 'utf8',
-})
-if (/libswift/iu.test(dylibDependencies)) {
-  throw new Error('Native dylib still links a Swift runtime library')
-}
 const addonDependencies = execFileSync('/usr/bin/otool', ['-L', addon], {
   encoding: 'utf8',
 })
-if (!addonDependencies.includes('@rpath/libGuanceElectronNative.dylib')) {
-  throw new Error('Node-API addon does not link the adjacent Native bridge dylib')
+if (addonDependencies.includes('libGuanceElectronNative')) {
+  throw new Error('Node-API addon still dynamically links GuanceElectronNative')
 }
 
-const symbols = execFileSync('/usr/bin/nm', ['-gU', dylib], { encoding: 'utf8' })
-if (/(?:\$s|\bswift_)/u.test(symbols)) {
-  throw new Error('Native dylib still exports or imports Swift symbols')
+const objectiveCMetadata = execFileSync('/usr/bin/nm', ['-m', addon], {
+  encoding: 'utf8',
+  maxBuffer: 16 * 1024 * 1024,
+})
+for (const category of [
+  '__OBJC_$_CATEGORY_NSApplication_$_FTAutotrack',
+  '__OBJC_$_CATEGORY_NSWindow_$_FTAutoTrack',
+  '__OBJC_$_CATEGORY_WKWebView_$_FTAutoTrack',
+]) {
+  if (!objectiveCMetadata.includes(category)) {
+    throw new Error(`Static Node-API addon is missing Objective-C Category: ${category}`)
+  }
 }
-const strings = execFileSync('/usr/bin/strings', [dylib], { encoding: 'utf8' })
+
+const strings = execFileSync('/usr/bin/strings', [addon], { encoding: 'utf8' })
 if (/\/Users\/|native\/darwin\/\.build/u.test(strings)) {
-  throw new Error('Native dylib contains an absolute developer build path')
+  throw new Error('Node-API addon contains an absolute developer build path')
 }
-const loadCommands = execFileSync('/usr/bin/otool', ['-l', dylib], {
+const loadCommands = execFileSync('/usr/bin/otool', ['-l', addon], {
   encoding: 'utf8',
 })
 if (/path \/Applications\/Xcode|path \/Library\/Developer|swift-runtime/u.test(loadCommands)) {
-  throw new Error('Native dylib contains a developer-toolchain rpath')
+  throw new Error('Node-API addon contains a developer-toolchain rpath')
 }
 
 const require = createRequire(import.meta.url)
@@ -70,4 +85,6 @@ for (const method of [
   }
 }
 
-console.log(`Verified universal macOS Native runtime in ${runtime}`)
+console.log(
+  `Verified ${manifest.architectures.join(' + ')} macOS managed runtime in ${runtime}`,
+)

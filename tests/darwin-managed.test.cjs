@@ -23,7 +23,6 @@ function settings(overrides = {}) {
     environment: "production",
     version: "1.0.0",
     sampleRate: 0.75,
-    actionTrackingEnabled: true,
     loggingEnabled: true,
     loggingSampleRate: 0.5,
     replayEnabled: true,
@@ -176,19 +175,14 @@ test("macOS settings map to the existing Native API without changing public unit
   assert.deepEqual(mapped.rum, {
     appId: "electron-app",
     sampleRate: 75,
-    enableTraceUserAction: true,
     enableTraceWebView: true,
   });
+  const removedActionSetting = normalizeNativeSettings(settings({
+    actionTrackingEnabled: true,
+  }));
+  assert.equal("actionTrackingEnabled" in removedActionSetting, false);
   assert.equal(
-    nativeConfigurations(normalizeNativeSettings(settings({
-      actionTrackingEnabled: false,
-    }))).rum.enableTraceUserAction,
-    false,
-  );
-  assert.equal(
-    nativeConfigurations(normalizeNativeSettings(settings({
-      actionTrackingEnabled: undefined,
-    }))).rum.enableTraceUserAction,
+    "enableTraceUserAction" in nativeConfigurations(removedActionSetting).rum,
     false,
   );
   assert.deepEqual(mapped.logger, {
@@ -340,7 +334,6 @@ test("macOS managed feature flags control optional Native configuration", async 
   const binding = new FakeBinding();
   const adapter = createManagedAdapter({
     settings: settings({
-      actionTrackingEnabled: false,
       loggingEnabled: false,
       replayEnabled: false,
       traceEnabled: false,
@@ -353,7 +346,7 @@ test("macOS managed feature flags control optional Native configuration", async 
     "sdk.initialize",
     "rum.configure",
   ]);
-  assert.equal(binding.invocations[1].payload.enableTraceUserAction, false);
+  assert.equal("enableTraceUserAction" in binding.invocations[1].payload, false);
   assert.equal(capabilities.log, false);
   assert.equal(capabilities.replay, false);
   assert.equal(capabilities.trace, false);
