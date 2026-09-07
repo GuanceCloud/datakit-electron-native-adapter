@@ -3,13 +3,14 @@
 const assert = require("node:assert/strict");
 const { EventEmitter, once } = require("node:events");
 const net = require("node:net");
-const nodeTest = require("node:test");
-const test = process.platform === "win32" ? nodeTest : nodeTest.skip;
+const test = require("node:test");
 const { connectMixedMode, startFullMode } = require("../main/index.cjs");
 const {
   BRIDGE_CHANNEL,
   BRIDGE_CONFIGURATION_CHANNEL,
 } = require("../internal/constants.cjs");
+
+const windowsTest = process.platform === "win32" ? test : test.skip;
 
 const VALID_HANDSHAKE = [
   "@guance-capabilities",
@@ -107,7 +108,7 @@ function fakeBrowserWindow() {
   return window;
 }
 
-test("Mixed Mode sends automatic cold launch with its first trusted Browser View", async () => {
+windowsTest("Mixed Mode sends automatic cold launch with its first trusted Browser View", async () => {
   const name = pipeName("automatic-launch");
   const server = net.createServer();
   let received = "";
@@ -150,7 +151,7 @@ test("Mixed Mode sends automatic cold launch with its first trusted Browser View
   await close(server);
 });
 
-test("Mixed Mode enableAppLaunch=false leaves launch lifecycle listeners disabled", async () => {
+windowsTest("Mixed Mode enableAppLaunch=false leaves launch lifecycle listeners disabled", async () => {
   const name = pipeName("launch-disabled");
   const server = net.createServer();
   let received = "";
@@ -179,7 +180,7 @@ test("Mixed Mode enableAppLaunch=false leaves launch lifecycle listeners disable
   await close(server);
 });
 
-test("Mixed Mode retries, validates the handshake, and uses the versioned IPC channel", async () => {
+windowsTest("Mixed Mode retries, validates the handshake, and uses the versioned IPC channel", async () => {
   const name = pipeName("retry");
   const server = net.createServer();
   let received = "";
@@ -267,7 +268,7 @@ test("Mixed Mode retries, validates the handshake, and uses the versioned IPC ch
   await close(server);
 });
 
-test("Mixed Mode rejects Browser Logs when the Native capability is disabled", async () => {
+windowsTest("Mixed Mode rejects Browser Logs when the Native capability is disabled", async () => {
   const name = pipeName("log-disabled");
   const server = net.createServer();
   let received = "";
@@ -304,7 +305,7 @@ test("Mixed Mode rejects Browser Logs when the Native capability is disabled", a
   await close(server);
 });
 
-test("Mixed Mode hides and rejects Browser Replay when Native Replay is disabled", async () => {
+windowsTest("Mixed Mode hides and rejects Browser Replay when Native Replay is disabled", async () => {
   const name = pipeName("replay-disabled");
   const server = net.createServer();
   let received = "";
@@ -351,7 +352,7 @@ test("Mixed Mode hides and rejects Browser Replay when Native Replay is disabled
   await close(server);
 });
 
-test("Mixed Mode rejects malformed capabilities and bounds connection retries", async () => {
+windowsTest("Mixed Mode rejects malformed capabilities and bounds connection retries", async () => {
   const malformedName = pipeName("malformed");
   const server = net.createServer((socket) => {
     socket.end("@guance-capabilities\tprotocol=2\trum=1\n");
@@ -381,7 +382,7 @@ test("Mixed Mode rejects malformed capabilities and bounds connection retries", 
   assert.ok(Date.now() - started < 1_000, "Mixed Mode retries exceeded the bound");
 });
 
-test("Full Mode validates the installed native directory before process startup", async () => {
+windowsTest("Full Mode validates the installed native directory before process startup", async () => {
   await assert.rejects(
     startFullMode({
       ipcMain: new EventEmitter(),

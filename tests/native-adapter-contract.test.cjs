@@ -8,6 +8,7 @@ const test = require("node:test");
 const { createClient } = require("../core/client.cjs");
 const { BRIDGE_CHANNEL, PROTOCOL_VERSION } = require("../core/channels.cjs");
 const publicApi = require("../main/index.cjs");
+const { mapNativeSettings } = require("../platform/win32/managed-process.cjs");
 
 const CAPABILITIES = Object.freeze({
   protocolVersion: PROTOCOL_VERSION,
@@ -89,6 +90,22 @@ test("public package exposes bootstrap and only supported subpaths", () => {
   assert.equal(typeof publicApi.connectMixedMode, "function");
 });
 
+test("removed Native action tracking setting is not forwarded to Windows managed", () => {
+  const baseSettings = {
+    applicationId: "electron-app",
+    datakitUrl: "http://127.0.0.1:9529",
+    service: "desktop-app",
+    environment: "production",
+    version: "1.0.0",
+  };
+  const mapped = mapNativeSettings({ ...baseSettings, actionTrackingEnabled: true });
+  assert.equal("actionTrackingEnabled" in mapped.normalized, false);
+  assert.equal(
+    "GUANCE_RUM_NATIVE_ACTION_TRACKING_ENABLED" in mapped.nativeEnvironment,
+    false,
+  );
+});
+
 test("common client binds trusted WebContents to the Native Adapter contract", async () => {
   const adapter = fakeAdapter();
   const ipcMain = new EventEmitter();
@@ -96,7 +113,7 @@ test("common client binds trusted WebContents to the Native Adapter contract", a
   const client = await createClient({
     electron: { ipcMain },
     adapter,
-    mode: "embedded",
+    mode: "managed",
     enableAppLaunch: false,
     onNativeCommand: (command) => commands.push(command),
   });
@@ -115,7 +132,7 @@ test("common client binds trusted WebContents to the Native Adapter contract", a
   }, "trusted");
   adapter.emitCommand({ type: "refresh-layout" });
 
-  assert.equal(client.mode, "embedded");
+  assert.equal(client.mode, "managed");
   assert.equal(client.capabilities.protocolVersion, PROTOCOL_VERSION);
   assert.deepEqual(client.capabilities.allowedWebViewHosts, ["app.example.com"]);
   assert.equal(adapter.calls.filter(([name]) => name === "register").length, 1);
@@ -146,7 +163,7 @@ test("malformed capabilities are rejected before IPC registration", async () => 
     createClient({
       electron: { ipcMain },
       adapter,
-      mode: "embedded",
+      mode: "managed",
       enableAppLaunch: false,
     }),
     /capability replay must be a boolean/,
@@ -168,7 +185,7 @@ test("autoAttach tracks existing and newly-created windows and cleans up", async
       BrowserWindow: { getAllWindows: () => [existing] },
     },
     adapter,
-    mode: "embedded",
+    mode: "managed",
     autoAttach: true,
     enableAppLaunch: false,
   });

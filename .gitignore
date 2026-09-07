@@ -1,3 +1,14 @@
+.DS_Store
 node_modules/
 *.tgz
 .npm-cache/
+.cloudcare/
+native/darwin/.build/
+native/darwin/runtime/
+examples/macos/*/.env
+examples/macos/*/.env.local
+examples/macos/*/dist/
+examples/macos/*/release/
+examples/macos/*/native-build/
+examples/macos/native/macos/.build/
+examples/macos/native/macos/.swiftpm/
