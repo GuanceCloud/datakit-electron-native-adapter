@@ -2,6 +2,7 @@
 node_modules/
 *.tgz
 .npm-cache/
+.cloudcare/
 native/darwin/.build/
 native/darwin/runtime/
 examples/macos/*/.env

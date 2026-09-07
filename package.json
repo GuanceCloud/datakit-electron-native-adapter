@@ -6,6 +6,9 @@
   "license": "Apache-2.0",
   "type": "commonjs",
   "main": "main/index.cjs",
+  "bin": {
+    "ft-electron-native": "bin/ft-electron-native.mjs"
+  },
   "exports": {
     ".": "./main/index.cjs",
     "./main": "./main/index.cjs",
@@ -14,6 +17,7 @@
   },
   "files": [
     "README.md",
+    "bin",
     "docs/macos-managed-settings-mapping.md",
     "core",
     "main",

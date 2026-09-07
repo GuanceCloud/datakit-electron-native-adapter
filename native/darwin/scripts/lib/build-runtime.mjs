@@ -101,7 +101,7 @@ function repositoryStateAt(sdkRoot) {
   }
 }
 
-export function resolveNativeSDKSource({ adapterRoot, options }) {
+export function resolveNativeSDKSource({ buildRoot, options }) {
   if (options.sdkRoot) {
     const sdkRoot = validateNativeSDKSource(options.sdkRoot)
     return {
@@ -113,7 +113,7 @@ export function resolveNativeSDKSource({ adapterRoot, options }) {
     }
   }
 
-  const checkoutRoot = path.join(adapterRoot, '.build', 'native-sdk')
+  const checkoutRoot = path.join(buildRoot, '.build', 'native-sdk')
   const sdkRoot = path.join(checkoutRoot, checkoutIdentifier(options.sdkRepository, options.sdkRef))
   fs.mkdirSync(checkoutRoot, { recursive: true })
   if (!fs.existsSync(path.join(sdkRoot, '.git'))) {
@@ -224,9 +224,9 @@ export function nativeAddonLinkArguments({
   ]
 }
 
-function buildArchitecture({ adapterRoot, architecture, configuration, environment, sdkRoot, stageRoot }) {
+function buildArchitecture({ buildRoot, architecture, configuration, environment, sdkRoot, stageRoot }) {
   const architectureName = architecture || darwinArchitecture(process.arch)
-  const scratchPath = path.join(adapterRoot, '.build', 'swift', `static-${configuration}-${architectureName}`)
+  const scratchPath = path.join(buildRoot, '.build', 'swift', `static-${configuration}-${architectureName}`)
   const releaseHygieneFlags = [
     '-Xcc',
     '-fvisibility=hidden',
@@ -249,10 +249,10 @@ function buildArchitecture({ adapterRoot, architecture, configuration, environme
     '--product',
     PRODUCT_NAME,
     ...releaseHygieneFlags,
-  ], { cwd: adapterRoot, env: environment })
+  ], { cwd: buildRoot, env: environment })
   const bin = run('swift', ['build', ...commonSwiftArguments, '--show-bin-path'], {
     capture: true,
-    cwd: adapterRoot,
+    cwd: buildRoot,
     env: environment,
   }).trim()
   const builtStaticLibrary = path.join(bin, STATIC_LIBRARY_NAME)
@@ -270,7 +270,7 @@ function buildArchitecture({ adapterRoot, architecture, configuration, environme
     outputPath: stagedAddon,
     sdkRoot,
     staticLibraryPath: builtStaticLibrary,
-  }), { cwd: adapterRoot, env: environment })
+  }), { cwd: buildRoot, env: environment })
   removeDeveloperRpaths(stagedAddon, environment)
 
   return {
@@ -288,9 +288,8 @@ function copyResourceBundles(bin, destination) {
   }
 }
 
-function publishRuntime({ adapterRoot, configuration, metadata, stages, universal }) {
-  const output = path.join(adapterRoot, 'runtime')
-  const publishStage = path.join(adapterRoot, '.build', 'runtime-publish')
+function publishRuntime({ buildRoot, configuration, metadata, output, stages, universal }) {
+  const publishStage = path.join(buildRoot, '.build', 'runtime-publish')
   fs.rmSync(publishStage, { recursive: true, force: true })
   fs.mkdirSync(publishStage, { recursive: true })
 
@@ -330,19 +329,39 @@ function publishRuntime({ adapterRoot, configuration, metadata, stages, universa
   return output
 }
 
-export function buildManagedRuntime({ adapterRoot, options, universal }) {
+export function buildManagedRuntime({
+  adapterRoot,
+  architecture,
+  buildRoot = adapterRoot,
+  options,
+  output = path.join(buildRoot, 'runtime'),
+  universal,
+}) {
   if (process.platform !== 'darwin') throw new Error('The macOS Native runtime can only be built on macOS')
-  const source = resolveNativeSDKSource({ adapterRoot, options })
+  if (universal && architecture) {
+    throw new Error('A managed runtime build cannot select both universal and a single architecture')
+  }
+  if (architecture && !['arm64', 'x86_64'].includes(architecture)) {
+    throw new Error(`Unsupported macOS Native target architecture: ${architecture}`)
+  }
+  const resolvedBuildRoot = path.resolve(buildRoot)
+  const resolvedOutput = path.resolve(output)
+  const outputRelativePath = path.relative(resolvedBuildRoot, resolvedOutput)
+  if (!outputRelativePath || outputRelativePath.startsWith('..') || path.isAbsolute(outputRelativePath)) {
+    throw new Error(`Managed runtime output must be a child of its build root: ${resolvedOutput}`)
+  }
+  const source = resolveNativeSDKSource({ buildRoot: resolvedBuildRoot, options })
   const environment = {
     ...process.env,
     MACOSX_DEPLOYMENT_TARGET: MINIMUM_MACOS_VERSION,
   }
-  const stageRoot = path.join(adapterRoot, '.build', universal ? 'runtime-universal' : 'runtime-current')
+  const targetName = universal ? 'universal' : architecture || 'current'
+  const stageRoot = path.join(resolvedBuildRoot, '.build', `runtime-${targetName}`)
   fs.rmSync(stageRoot, { recursive: true, force: true })
   fs.mkdirSync(stageRoot, { recursive: true })
-  const architectures = universal ? ['arm64', 'x86_64'] : [undefined]
+  const architectures = universal ? ['arm64', 'x86_64'] : [architecture]
   const stages = architectures.map((architecture) => buildArchitecture({
-    adapterRoot,
+    buildRoot: resolvedBuildRoot,
     architecture,
     configuration: options.configuration,
     environment,
@@ -350,9 +369,10 @@ export function buildManagedRuntime({ adapterRoot, options, universal }) {
     stageRoot,
   }))
   return publishRuntime({
-    adapterRoot,
+    buildRoot: resolvedBuildRoot,
     configuration: options.configuration,
     metadata: source.metadata,
+    output: resolvedOutput,
     stages,
     universal,
   })

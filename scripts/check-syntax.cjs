@@ -30,6 +30,7 @@ function checkDirectory(directoryPath) {
 }
 
 for (const directory of [
+  "bin",
   "core",
   "examples",
   "internal",
