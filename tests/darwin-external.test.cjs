@@ -168,7 +168,9 @@ test("macOS Mixed Mode resolves only Native-host credentials", () => {
   );
 });
 
-test("macOS Mixed Mode authenticates, routes windows and events, and closes", async () => {
+test("macOS Mixed Mode authenticates, routes windows and events, and closes", {
+  skip: process.platform !== "darwin",
+}, async () => {
   const token = "native-generated-token";
   const protocol = await createProtocolServer(token);
   const ipcMain = new EventEmitter();
@@ -244,7 +246,9 @@ test("macOS Mixed Mode authenticates, routes windows and events, and closes", as
   }
 });
 
-test("macOS Mixed Mode validates Browser events and Native readiness", async () => {
+test("macOS Mixed Mode validates Browser events and Native readiness", {
+  skip: process.platform !== "darwin",
+}, async () => {
   const token = "adapter-validation-token";
   const protocol = await createProtocolServer(token, { capabilities: "[]" });
   let adapter;
@@ -273,7 +277,9 @@ test("macOS Mixed Mode validates Browser events and Native readiness", async () 
   }
 });
 
-test("macOS Mixed Mode rejects an invalid authentication token", async () => {
+test("macOS Mixed Mode rejects an invalid authentication token", {
+  skip: process.platform !== "darwin",
+}, async () => {
   const protocol = await createProtocolServer("expected-token");
   try {
     const adapter = createExternalSocketAdapter({
@@ -288,7 +294,9 @@ test("macOS Mixed Mode rejects an invalid authentication token", async () => {
   }
 });
 
-test("macOS Mixed Mode times out when the Native host never becomes ready", async () => {
+test("macOS Mixed Mode times out when the Native host never becomes ready", {
+  skip: process.platform !== "darwin",
+}, async () => {
   const protocol = await createProtocolServer("timeout-token", {}, { sendReady: false });
   try {
     const adapter = createExternalSocketAdapter({
