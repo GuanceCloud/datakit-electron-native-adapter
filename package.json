@@ -40,7 +40,7 @@
     "verify:native:macos": "node native/darwin/scripts/verify-runtime.mjs"
   },
   "peerDependencies": {
-    "electron": "43.x"
+    "electron": "^22.3.27 || 43.x"
   },
   "peerDependenciesMeta": {
     "electron": {
@@ -48,6 +48,6 @@
     }
   },
   "engines": {
-    "node": ">=22.12"
+    "node": ">=16.17.1"
   }
 }

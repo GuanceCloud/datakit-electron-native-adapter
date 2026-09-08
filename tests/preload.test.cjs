@@ -116,3 +116,28 @@ test("standalone preload is self-contained under the sandboxed require surface",
   );
   assert.equal(electron.mainWorld.FTWebViewJavascriptBridge.getPrivacyLevel(), "allow");
 });
+
+for (const entry of ["install", "standalone"]) {
+  test(entry + " preload works without executeInMainWorld on Electron 22", () => {
+    const electron = fakeElectron({ replayEnabled: true, replayPrivacy: "mask-user-input" });
+    delete electron.contextBridge.executeInMainWorld;
+    const install = () => {
+      if (entry === "install") return installElectronRumPreload(electron);
+      vm.runInNewContext(fs.readFileSync(path.join(__dirname, "..", "preload", "standalone.cjs"), "utf8"), {
+        Buffer,
+        require(name) {
+          assert.equal(name, "electron");
+          return electron;
+        },
+      });
+      return electron.mainWorld.FTWebViewJavascriptBridge;
+    };
+    const bridge = install();
+    assert.equal(bridge.getCapabilities(), '["records"]');
+    assert.equal(bridge.getPrivacyLevel(), "mask-user-input");
+    bridge.sendEvent("legacy-event");
+    bridge.sendEvent("x".repeat(MAX_BRIDGE_PAYLOAD_BYTES + 1));
+    assert.deepEqual(electron.sent, [[BRIDGE_CHANNEL, "legacy-event"]]);
+    assert.throws(install, /already (be )?occupied/);
+  });
+}

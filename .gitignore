@@ -12,3 +12,4 @@ examples/macos/*/release/
 examples/macos/*/native-build/
 examples/macos/native/macos/.build/
 examples/macos/native/macos/.swiftpm/
+.idea/
