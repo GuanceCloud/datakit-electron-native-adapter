@@ -11,7 +11,9 @@ This package is a CommonJS JavaScript adapter, not a Node Native Addon. It does 
 - macOS embedded mode: supported with the application-owned Guance macOS Native SDK and `GuanceElectronBridge.node`.
 - Linux: not supported.
 
-Electron `43.x` is the currently verified Electron line. Node.js `22.12` or newer is required.
+Windows compatibility baselines are Electron `22.3.27` (Windows 7 SP1 through Windows 11) and `43.x` (Windows 10+). The npm peer range is `^22.3.27 || 43.x`; intermediate Electron majors are not yet validated. Electron 22 is the legacy compatibility baseline and is end-of-life; see the [upstream support notice](https://www.electronjs.org/blog/electron-22-0). Native runtime compatibility must also be validated on each target OS. The macOS embedded backend retains its Electron 43.x baseline and requires the matching SDK-distributed native module.
+
+The JavaScript runtime baseline is Node.js `16.17.1`, as embedded in Electron 22. Development and `npm run check` require Node.js `22.12` or newer; users of a packaged application do not need a separate Node.js installation.
 
 ## Preferred API
 
