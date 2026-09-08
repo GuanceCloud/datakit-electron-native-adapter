@@ -4,6 +4,10 @@
   "private": true,
   "description": "Electron adapter for CloudCare native desktop RUM SDKs",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/GuanceCloud/datakit-electron-native-adapter.git"
+  },
   "type": "commonjs",
   "main": "main/index.cjs",
   "exports": {
