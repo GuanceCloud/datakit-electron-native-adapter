@@ -16,6 +16,7 @@
   "exports": {
     ".": "./main/index.cjs",
     "./main": "./main/index.cjs",
+    "./packaging/windows": "./packaging/windows.cjs",
     "./preload/install": "./preload/install.cjs",
     "./preload/standalone": "./preload/standalone.cjs"
   },
@@ -27,6 +28,7 @@
     "preload",
     "internal",
     "platform",
+    "packaging",
     "native/darwin/README.md",
     "native/darwin/scripts"
   ],
@@ -37,7 +39,13 @@
     "clean:native:macos": "node native/darwin/scripts/clean.mjs",
     "test": "node --test tests/*.test.cjs",
     "check": "npm run check:syntax && npm test",
+    "pack:windows": "node scripts/pack-windows.cjs",
+    "publish:windows": "node scripts/publish-windows.cjs",
+    "verify:windows:tarballs": "node scripts/verify-windows-tarballs.cjs",
     "verify:native:macos": "node native/darwin/scripts/verify-runtime.mjs"
+  },
+  "optionalDependencies": {
+    "@cloudcare/electron-native-adapter-win32-x64": "0.0.0-local"
   },
   "peerDependencies": {
     "electron": "^22.3.27 || 43.x"
