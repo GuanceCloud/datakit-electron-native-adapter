@@ -37,6 +37,7 @@ for (const directory of [
   "main",
   "native",
   "platform",
+  "packaging",
   "preload",
   "scripts",
 ]) {

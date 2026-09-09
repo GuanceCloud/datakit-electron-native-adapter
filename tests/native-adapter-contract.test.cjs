@@ -82,6 +82,7 @@ test("public package exposes bootstrap and only supported subpaths", () => {
   assert.deepEqual(Object.keys(packageJson.exports), [
     ".",
     "./main",
+    "./packaging/windows",
     "./preload/install",
     "./preload/standalone",
   ]);

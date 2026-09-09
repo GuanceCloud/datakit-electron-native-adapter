@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { parseCapabilities } = require("./named-pipe.cjs");
+const { resolveWindowsRuntime } = require("./runtime.cjs");
 const {
   browserBridgeEventToNativeInput,
 } = require("../../internal/rum-line-protocol.cjs");
@@ -12,7 +13,6 @@ const { normalizeNativeSettings } = require("../../internal/native-settings.cjs"
 const {
   integer,
   reportError,
-  requiredString,
 } = require("../../internal/options.cjs");
 
 const MAX_PENDING_INPUT_BYTES = 8 * 1024 * 1024;
@@ -136,7 +136,7 @@ function createManagedProcessAdapter({
   spawnProcess = spawn,
   fileExists = fs.existsSync,
 } = {}) {
-  const nativeDirectory = path.resolve(requiredString(directory, "native.directory"));
+  const nativeDirectory = resolveWindowsRuntime({ directory });
   const bridgePath = path.join(nativeDirectory, "guance_windows_electron_bridge.exe");
   const runtimePath = path.join(nativeDirectory, "guance_windows_native.dll");
   const readyLimit = integer(readyTimeoutMs, 10_000, 1, 60_000, "native.readyTimeoutMs");
