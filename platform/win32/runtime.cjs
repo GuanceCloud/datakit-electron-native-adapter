@@ -4,7 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { PROTOCOL_VERSION } = require("../../core/channels.cjs");
-const PACKAGE_NAME = "@cloudcare/electron-native-adapter-win32-x64";
+const PACKAGE_NAME = "@cloudcare/electron-native-adapter";
+const RUNTIME_SUBDIRECTORY = "native/win32-x64";
 const RUNTIME_FILES = Object.freeze([
   "guance_windows_electron_bridge.exe",
   "guance_windows_native.dll",
@@ -30,10 +31,10 @@ function validateRuntime(directory, { version, requireManifest = true } = {}) {
   catch (error) { throw new Error(`Invalid or missing Windows runtime manifest: ${manifestPath}. ${error.message}`); }
   if (manifest.schemaVersion !== 1 || manifest.platform !== "win32" || manifest.arch !== "x64" ||
       manifest.configuration !== "Release" || manifest.protocolVersion !== PROTOCOL_VERSION) {
-    throw new Error("Windows runtime requires Release win32-x64 and a compatible bridge protocol. Reinstall matching npm packages.");
+    throw new Error("Windows runtime requires Release win32-x64 and a compatible bridge protocol. Reinstall the adapter package.");
   }
   if (version && manifest.npmPackageVersion !== version) {
-    throw new Error(`Windows runtime version mismatch: expected ${version}, received ${manifest.npmPackageVersion}. Reinstall matching npm packages.`);
+    throw new Error(`Windows runtime version mismatch: expected ${version}, received ${manifest.npmPackageVersion}. Reinstall the adapter package.`);
   }
   if (!/^[a-f0-9]{40}$/.test(manifest.source?.commit || "") ||
       typeof manifest.source.dirty !== "boolean" || !manifest.sdkVersion ||
@@ -50,7 +51,7 @@ function validateRuntime(directory, { version, requireManifest = true } = {}) {
     }
     const record = manifest.files[name];
     if (record.size !== bytes.length || record.sha256 !== crypto.createHash("sha256").update(bytes).digest("hex")) {
-      throw new Error(`Windows runtime integrity mismatch: ${name}. Reinstall the platform package.`);
+      throw new Error(`Windows runtime integrity mismatch: ${name}. Reinstall the adapter package.`);
     }
   }
   return manifest;
@@ -60,7 +61,7 @@ function resolveWindowsRuntime({
   directory,
   resourcesPath = process.resourcesPath,
   arch = process.arch,
-  resolvePackage = require.resolve,
+  packageRoot = path.resolve(__dirname, "../.."),
 } = {}) {
   if (directory !== undefined) {
     if (typeof directory !== "string" || !directory.trim()) throw new Error("native.directory must be a non-empty string.");
@@ -71,22 +72,23 @@ function resolveWindowsRuntime({
     return resolved;
   }
   if (arch !== "x64") throw new Error(`Windows npm managed runtime does not support ${arch}; use an explicit native.directory with a compatible native build.`);
-  const version = require("../../package.json").optionalDependencies[PACKAGE_NAME];
+  const metadata = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
+  if (metadata.name !== PACKAGE_NAME || typeof metadata.version !== "string") {
+    throw new Error("Invalid Electron adapter package metadata.");
+  }
+  const version = metadata.version;
   const staged = resourcesPath && path.join(resourcesPath, "native");
   if (staged && fs.existsSync(staged)) {
     validateRuntime(staged, { version });
     return staged;
   }
-  let metadataPath;
-  try { metadataPath = resolvePackage(`${PACKAGE_NAME}/package.json`); }
-  catch { throw new Error(`Missing optional package ${PACKAGE_NAME}@${version}. Install with npm install --include=optional, or set native.directory explicitly.`); }
-  const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
-  if (metadata.name !== PACKAGE_NAME || metadata.version !== version) {
-    throw new Error(`Windows platform package version mismatch: expected ${PACKAGE_NAME}@${version}, received ${metadata.version}. Reinstall matching npm packages.`);
+  const runtime = path.join(packageRoot, RUNTIME_SUBDIRECTORY);
+  assertOutsideAsar(runtime);
+  if (!fs.existsSync(runtime)) {
+    throw new Error(`Missing bundled Windows runtime in ${PACKAGE_NAME}@${version}. Install the prepared npm tarball, or set native.directory to a local native build.`);
   }
-  const runtime = path.join(path.dirname(metadataPath), "runtime");
   validateRuntime(runtime, { version });
   return runtime;
 }
 
-module.exports = { PACKAGE_NAME, RUNTIME_FILES, resolveWindowsRuntime, validateRuntime };
+module.exports = { PACKAGE_NAME, RUNTIME_SUBDIRECTORY, RUNTIME_FILES, resolveWindowsRuntime, validateRuntime };
