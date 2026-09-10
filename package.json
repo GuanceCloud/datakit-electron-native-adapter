@@ -34,16 +34,12 @@
     "native/win32-x64"
   ],
   "scripts": {
-    "build:native:macos:managed": "node native/darwin/scripts/build-native.mjs",
-    "build:native:macos:universal": "node native/darwin/scripts/build-universal.mjs",
     "check:syntax": "node scripts/check-syntax.cjs",
-    "clean:native:macos": "node native/darwin/scripts/clean.mjs",
     "test": "node --test tests/*.test.cjs",
     "check": "npm run check:syntax && npm test",
     "pack:windows": "node scripts/pack-windows.cjs",
     "publish:windows": "node scripts/publish-windows.cjs",
-    "verify:windows:tarballs": "node scripts/verify-windows-tarballs.cjs",
-    "verify:native:macos": "node native/darwin/scripts/verify-runtime.mjs"
+    "verify:windows:tarballs": "node scripts/verify-windows-tarballs.cjs"
   },
   "peerDependencies": {
     "electron": "^22.3.27 || 43.x"
@@ -55,5 +51,8 @@
   },
   "engines": {
     "node": ">=16.17.1"
+  },
+  "dependencies": {
+    "tar": "^7.5.22"
   }
 }
