@@ -95,7 +95,7 @@ The pinned SDK release must include Electron runtime assets before the default d
 
     npx ft-electron-native managed --runtime-archive /path/to/guance-electron-runtime-1.6.8-alpha.3-darwin-universal.tar.gz
 
-See [runtime installation options](native/darwin/README.md) for versions, architectures, mirrors, and caching.
+See [runtime installation options](native/darwin/README.md) for versions, mirrors, and caching.
 
 ## Mixed mode
 

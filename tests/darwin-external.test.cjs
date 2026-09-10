@@ -38,7 +38,7 @@ function replayEvent() {
 function logEvent() {
   return JSON.stringify({
     name: "log",
-    data: { message: "not supported", status: "warn" },
+    data: { message: "Mixed Browser warning", status: "warn" },
   });
 }
 
@@ -106,6 +106,7 @@ async function createProtocolServer(token, configuration = {}, { sendReady = tru
             connectionID,
             configuration: {
               enableTraceWebView: true,
+              enableWebViewLog: true,
               allowedWebViewHosts: ["example.com"],
               maximumMessageBytes: 1024 * 1024,
               capabilities: '["records"]',
@@ -192,7 +193,7 @@ test("macOS Mixed Mode authenticates, routes windows and events, and closes", {
     assert.deepEqual(client.capabilities, {
       protocolVersion: PROTOCOL_VERSION,
       rum: true,
-      log: false,
+      log: true,
       replay: true,
       trace: false,
       replayPrivacy: "mask-user-input",
@@ -214,10 +215,17 @@ test("macOS Mixed Mode authenticates, routes windows and events, and closes", {
       sender: window.webContents,
       senderFrame: window.webContents.mainFrame,
     }, replayEvent());
-    await waitFor(() => protocol.messages.filter((message) => message.type === "event").length === 2);
+    ipcMain.emit(BRIDGE_CHANNEL, {
+      sender: window.webContents,
+      senderFrame: window.webContents.mainFrame,
+    }, logEvent());
+    await waitFor(() => protocol.messages.filter((message) => message.type === "event").length === 3);
     assert.deepEqual(JSON.parse(
       protocol.messages.find((message) => message.type === "event").payload,
     ), [{ handlerName: "sendEvent", data: rumEvent() }]);
+    assert.deepEqual(JSON.parse(
+      protocol.messages.filter((message) => message.type === "event")[2].payload,
+    ), [{ handlerName: "sendEvent", data: logEvent() }]);
 
     protocol.sendCommand(301, "takeSubsequentFullSnapshot");
     await waitFor(() => window.webContents.executedScripts.length === 1);
@@ -250,7 +258,10 @@ test("macOS Mixed Mode validates Browser events and Native readiness", {
   skip: process.platform !== "darwin",
 }, async () => {
   const token = "adapter-validation-token";
-  const protocol = await createProtocolServer(token, { capabilities: "[]" });
+  const protocol = await createProtocolServer(token, {
+    capabilities: "[]",
+    enableWebViewLog: false,
+  });
   let adapter;
   try {
     adapter = createExternalSocketAdapter({
@@ -268,7 +279,7 @@ test("macOS Mixed Mode validates Browser events and Native readiness", {
       metadata: {},
     };
     adapter.registerWebContents(registration);
-    assert.throws(() => adapter.sendBrowserEvent(registration, logEvent()), /does not expose Browser Log/);
+    assert.throws(() => adapter.sendBrowserEvent(registration, logEvent()), /not enabled by the Native host/);
     assert.throws(() => adapter.sendBrowserEvent(registration, replayEvent()), /not enabled by the Native host/);
     adapter.unregisterWebContents(registration);
   } finally {

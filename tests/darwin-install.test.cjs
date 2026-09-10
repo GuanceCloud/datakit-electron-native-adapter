@@ -81,7 +81,7 @@ test("checksum failure preserves an existing runtime", async (t) => {
   assert.equal(fs.readFileSync(path.join(data.output, "previous"), "utf8"), "keep");
 });
 
-test("rejects mismatched architecture, SDK version, linkage, and file hashes", async (t) => {
+test("rejects a non-Universal runtime, mismatched SDK version, linkage, and file hashes", async (t) => {
   const { installManagedRuntime } = await installModule();
   for (const overrides of [
     { architectures: ["arm64"] }, { nativeSDK: { version: "1.6.7" } },

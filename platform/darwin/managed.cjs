@@ -125,6 +125,7 @@ function nativeConfigurations(settings) {
     logger: Object.freeze({
       sampleRate: nativeSampling(settings.loggingSampleRate),
       enableCustomLog: true,
+      enableWebViewLog: true,
       enableLinkRumData: true,
     }),
     trace: Object.freeze({
@@ -181,6 +182,7 @@ function parseBridgeConfiguration(value) {
   }
   return Object.freeze({
     enableTraceWebView: candidate.enableTraceWebView === true,
+    enableWebViewLog: candidate.enableWebViewLog === true,
     allowedWebViewHosts: allowedWebViewHosts?.map((host) => host.trim()),
     maximumMessageBytes,
     capabilities: Object.freeze([...bridgeCapabilities]),
@@ -262,15 +264,6 @@ function nativeWindowHandle(hostWindow) {
   return handle;
 }
 
-function browserLogInvocation(event) {
-  const { message, status, ...attributes } = event.record;
-  return {
-    content: message,
-    status: status.toLowerCase() === "warn" ? "warning" : status.toLowerCase(),
-    attributes,
-  };
-}
-
 function createManagedAdapter({ directory, settings, binding: suppliedBinding, electron, onError } = {}) {
   let binding;
   let normalized;
@@ -283,7 +276,6 @@ function createManagedAdapter({ directory, settings, binding: suppliedBinding, e
   let transportFailure;
   let commandListener;
   const registrations = new Map();
-  const pendingInvocations = new Set();
 
   const failTransport = (error) => {
     if (stopping || transportFailure) return;
@@ -306,10 +298,6 @@ function createManagedAdapter({ directory, settings, binding: suppliedBinding, e
     } catch {
       throw new Error(`macOS Native ${method} returned invalid JSON.`);
     }
-  };
-  const trackInvocation = (promise) => {
-    pendingInvocations.add(promise);
-    promise.catch(failTransport).finally(() => pendingInvocations.delete(promise));
   };
   const updateNativeRegistration = (state, url = state.webContents.getURL?.() || "") => {
     state.hostAllowed = isAllowedHost(
@@ -373,12 +361,15 @@ function createManagedAdapter({ directory, settings, binding: suppliedBinding, e
         if (!bridgeConfiguration.enableTraceWebView) {
           throw new Error("The macOS Native RUM WebView bridge is disabled.");
         }
+        if (normalized.loggingEnabled && !bridgeConfiguration.enableWebViewLog) {
+          throw new Error("The macOS Native Browser Log bridge is disabled.");
+        }
         const replay = normalized.replayEnabled &&
           bridgeConfiguration.capabilities.includes("records");
         capabilities = Object.freeze({
           protocolVersion: PROTOCOL_VERSION,
           rum: true,
-          log: normalized.loggingEnabled,
+          log: normalized.loggingEnabled && bridgeConfiguration.enableWebViewLog,
           replay,
           trace: normalized.traceEnabled,
           replayPrivacy: replay ? bridgeConfiguration.privacyLevel : "mask",
@@ -489,8 +480,6 @@ function createManagedAdapter({ directory, settings, binding: suppliedBinding, e
         if (!capabilities.log) {
           throw new Error("Browser Log collection is not enabled in the native settings.");
         }
-        trackInvocation(invoke("logger.log", browserLogInvocation(event)));
-        return;
       }
       if (event.name === "session_replay" && !capabilities.replay) {
         throw new Error("Browser Session Replay is not enabled in the native settings.");
@@ -539,7 +528,6 @@ function createManagedAdapter({ directory, settings, binding: suppliedBinding, e
             firstError ||= error;
           }
         }
-        await Promise.allSettled([...pendingInvocations]);
         if (initialized) {
           try {
             await invoke("sdk.shutdown");

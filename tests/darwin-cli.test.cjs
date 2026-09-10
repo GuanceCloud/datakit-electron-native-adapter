@@ -14,30 +14,27 @@ const cliModule = () => import(pathToFileURL(path.join(root, "native/darwin/scri
 test("customer CLI defaults to a pinned precompiled Universal runtime", async () => {
   const { parseCustomerCLIArguments } = await cliModule();
   const parsed = parseCustomerCLIArguments(["managed"], {});
-  assert.equal(parsed.architecture, "universal");
   assert.equal(parsed.installOptions.sdkVersion, "1.6.8-alpha.3");
+  assert.equal("architecture" in parsed.installOptions, false);
   assert.equal(parsed.installOptions.runtimeArchive, undefined);
 });
 
-test("customer CLI supports explicit architectures, versions, mirrors, and local archives", async () => {
+test("customer CLI supports versions, mirrors, and local Universal archives", async () => {
   const { parseCustomerCLIArguments } = await cliModule();
   const parsed = parseCustomerCLIArguments([
-    "managed", "--arch=current", "--sdk-version", "1.6.8",
+    "managed", "--sdk-version", "1.6.8",
     "--download-base-url", "https://downloads.example.com/native",
     "--runtime-archive", "/tmp/runtime.tar.gz",
-  ], {}, "x64");
-  assert.equal(parsed.architecture, "x64");
+  ], {});
   assert.equal(parsed.installOptions.sdkVersion, "1.6.8");
   assert.equal(parsed.installOptions.runtimeArchive, "/tmp/runtime.tar.gz");
   assert.equal(parsed.installOptions.downloadBaseURL, "https://downloads.example.com/native");
 });
 
-test("customer CLI rejects mixed-mode installation and all previous source-build options", async () => {
+test("customer CLI rejects mixed-mode installation and removed build or architecture options", async () => {
   const { parseCustomerCLIArguments } = await cliModule();
   assert.throws(() => parseCustomerCLIArguments(["external"], {}), /Native host SDK.*does not install/u);
-  assert.throws(() => parseCustomerCLIArguments(["managed", "--arch", "ia32"], {}), /Unsupported architecture/u);
-  assert.throws(() => parseCustomerCLIArguments(["managed", "--arch", "arm64", "--arch=x64"], {}), /only be specified once/u);
-  for (const option of ["--sdk-root", "--sdk-repository", "--debug"]) {
+  for (const option of ["--arch", "--sdk-root", "--sdk-repository", "--debug"]) {
     assert.throws(() => parseCustomerCLIArguments(["managed", option, "/tmp/sdk"], {}), /Unknown argument/u);
   }
 });
@@ -57,9 +54,9 @@ test("CLI awaits installation into the customer application, without a build req
     write(message) { messages.push(message); },
   });
   assert.equal(request.applicationRoot, applicationRoot);
-  assert.equal(request.options.architecture, "universal");
+  assert.equal("architecture" in request.options, false);
   assert.equal(result.output, path.join(applicationRoot, ".cloudcare/native/darwin/runtime"));
-  assert.match(messages[0], /Installed the universal/u);
+  assert.match(messages[0], /Installed the Universal/u);
 });
 
 test("mixed mode fails before calling the installer", async () => {
@@ -77,12 +74,13 @@ test("customer executable prints help without any compiler in PATH", () => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /precompiled/u);
-  assert.match(result.stdout, /default: universal/u);
+  assert.match(result.stdout, /Universal/u);
 });
 
 test("npm package remains JavaScript-only with no automatic runtime installation", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   assert.equal(pkg.bin["ft-electron-native"], "bin/ft-electron-native.mjs");
+  assert.equal(pkg.peerDependencies.electron, ">=22");
   assert.equal(pkg.scripts.install, undefined);
   assert.equal(pkg.scripts.postinstall, undefined);
   assert.equal(pkg.files.some((file) => file.endsWith(".node") || file === "native/darwin/runtime"), false);

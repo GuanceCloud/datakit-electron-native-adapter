@@ -9,22 +9,19 @@ export const DEFAULT_NATIVE_SDK_VERSION = '1.6.8-alpha.3'
 export const DEFAULT_DOWNLOAD_BASE_URL = 'https://github.com/GuanceCloud/datakit-ios/releases/download'
 const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 
-export function runtimeRelease({ sdkVersion = DEFAULT_NATIVE_SDK_VERSION, architecture = 'universal',
+export function runtimeRelease({ sdkVersion = DEFAULT_NATIVE_SDK_VERSION,
   downloadBaseURL = DEFAULT_DOWNLOAD_BASE_URL } = {}) {
   if (!/^v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/u.test(sdkVersion)) {
     throw new Error('Invalid Native SDK version: ' + sdkVersion)
-  }
-  if (!['universal', 'arm64', 'x64'].includes(architecture)) {
-    throw new Error('Unsupported runtime architecture: ' + architecture)
   }
   const base = new URL(downloadBaseURL)
   if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) {
     throw new Error('Runtime download base must be an HTTPS URL without credentials, query, or fragment')
   }
   const version = sdkVersion.replace(/^v/u, '')
-  const filename = 'guance-electron-runtime-' + version + '-darwin-' + architecture + '.tar.gz'
+  const filename = 'guance-electron-runtime-' + version + '-darwin-universal.tar.gz'
   return {
-    version, architecture, filename,
+    version, filename,
     url: base.href.replace(/\/$/u, '') + '/' + encodeURIComponent(sdkVersion) + '/' + filename,
   }
 }
@@ -59,15 +56,14 @@ function runtimeFiles(directory, relative = '') {
 export function validateRuntime(directory, release) {
   const files = runtimeFiles(directory)
   const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'runtime-manifest.json'), 'utf8'))
-  const architectures = release.architecture === 'universal'
-    ? ['arm64', 'x86_64'] : [release.architecture === 'x64' ? 'x86_64' : 'arm64']
+  const architectures = ['arm64', 'x86_64']
   if (manifest.schemaVersion !== 1 || manifest.mode !== 'managed' ||
       manifest.platform !== 'darwin' || manifest.nativeSDKLinkage !== 'static' ||
       manifest.configuration !== 'release' || manifest.nativeSDK?.version !== release.version ||
       manifest.nodeAPIVersion !== 8 || !/^\d+\.\d+(?:\.\d+)?$/u.test(manifest.minimumMacOSVersion || '') ||
       !Array.isArray(manifest.architectures) ||
       JSON.stringify([...manifest.architectures].sort()) !== JSON.stringify(architectures.sort())) {
-    throw new Error('Runtime manifest does not match the requested SDK version, architecture, or format')
+    throw new Error('Runtime manifest does not match the requested SDK version or Universal format')
   }
   const entries = fs.readdirSync(directory, { withFileTypes: true })
   if (!files['guance_electron.node'] || !entries.some((entry) => entry.isDirectory() && entry.name.endsWith('.bundle')) ||

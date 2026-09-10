@@ -23,7 +23,8 @@ From the Electron application root:
 
     npx ft-electron-native managed
 
-The default is Native SDK `1.6.8-alpha.3`, Universal (arm64 plus x86_64).
+The default is Native SDK `1.6.8-alpha.3`. Every release uses one Universal
+runtime containing arm64 and x86_64.
 The CLI downloads these assets from that GitHub Release:
 
     guance-electron-runtime-1.6.8-alpha.3-darwin-universal.tar.gz
@@ -37,17 +38,14 @@ reuse. A failed download or validation leaves the existing runtime intact.
 
 Options:
 
-- `--arch universal|current|arm64|x64`: select the target architecture; current
-  uses the Node process architecture. Use an explicit target when packaging for
-  another architecture.
 - `--sdk-version <version>`: select a compatible SDK release. The default is pinned
   by the adapter; version overrides do not imply adapter API compatibility.
 - `--download-base-url <https-url>`: use a mirror with the same
   `<tag>/<asset-name>` layout. The default base is
   `https://github.com/GuanceCloud/datakit-ios/releases/download`.
 - `--runtime-archive <path>`: install a local archive and its adjacent `.sha256`
-  sidecar, without network access. Specify matching version and architecture
-  options if the archive differs from the defaults.
+  sidecar, without network access. Specify a matching version if the archive
+  differs from the default.
 
 Equivalent environment variables are `GUANCE_NATIVE_SDK_VERSION`,
 `GUANCE_NATIVE_RUNTIME_DOWNLOAD_BASE_URL`, and `GUANCE_NATIVE_RUNTIME_ARCHIVE`.
@@ -56,9 +54,9 @@ Equivalent environment variables are `GUANCE_NATIVE_SDK_VERSION`,
 
 Generate archives from the Native SDK repository, which owns the build tools:
 
-    node scripts/build-electron-runtime.mjs --arch all
+    node scripts/build-electron-runtime.mjs
 
-Then install one of those archives in the Electron application:
+Then install that archive in the Electron application:
 
     npx ft-electron-native managed --runtime-archive /path/to/guance-electron-runtime-1.6.8-alpha.3-darwin-universal.tar.gz
 
