@@ -43,7 +43,7 @@ test("bad explicit override never falls back and missing bundle/unsupported arch
   assert.throws(() => resolveWindowsRuntime({ directory: "" }), /non-empty/);
   assert.throws(() => resolveWindowsRuntime({ arch: "arm64" }), /does not support arm64/);
   fs.renameSync(f.runtime, path.join(f.root, "exported-runtime"));
-  assert.throws(() => resolveWindowsRuntime({ packageRoot: f.root, resourcesPath: null, arch: "x64" }), /Missing bundled Windows runtime/);
+  assert.throws(() => resolveWindowsRuntime({ packageRoot: f.root, resourcesPath: null, arch: "x64" }), /Missing downloaded Windows runtime/);
   assert.throws(() => resolveWindowsRuntime({ directory: path.join(f.root, "app.asar/runtime") }), /cannot run inside ASAR/);
 });
 
@@ -62,10 +62,10 @@ test("missing DLL, tampering, wrong PE architecture and manifest/version mismatc
   assert.throws(() => validateRuntime(f.runtime), /runtime is missing/);
 });
 
-test("package metadata and stale staged resources cannot silently select another runtime", (t) => {
+test("SDK and npm versions are independent while invalid staged resources fail", (t) => {
   const f = fixture(t);
   fs.writeFileSync(path.join(f.root, "package.json"), JSON.stringify({ name: PACKAGE_NAME, version: "8.0.0" }));
-  assert.throws(() => resolveWindowsRuntime({ ...f, arch: "x64", resourcesPath: null }), /runtime version mismatch/);
+  assert.equal(resolveWindowsRuntime({ ...f, arch: "x64", resourcesPath: null }), f.runtime);
   const resources = path.join(f.root, "resources"); fs.mkdirSync(path.join(resources, "native"), { recursive: true });
   assert.throws(() => resolveWindowsRuntime({ ...f, arch: "x64", resourcesPath: resources }), /runtime is missing/);
 });

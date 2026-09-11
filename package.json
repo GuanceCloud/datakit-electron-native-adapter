@@ -11,12 +11,13 @@
   "type": "commonjs",
   "main": "main/index.cjs",
   "bin": {
-    "ft-electron-native": "bin/ft-electron-native.mjs"
+    "guance-electron-native": "bin/guance-electron-native.mjs"
   },
   "exports": {
     ".": "./main/index.cjs",
     "./main": "./main/index.cjs",
     "./packaging/windows": "./packaging/windows.cjs",
+    "./packaging/macos": "./packaging/macos.cjs",
     "./preload/install": "./preload/install.cjs",
     "./preload/standalone": "./preload/standalone.cjs"
   },
@@ -30,21 +31,18 @@
     "internal",
     "platform",
     "packaging",
+    "runtime",
     "native/darwin/README.md",
-    "native/darwin/scripts",
-    "native/win32-x64"
+    "native/darwin/scripts"
   ],
   "scripts": {
-    "build:native:macos:managed": "node native/darwin/scripts/build-native.mjs",
-    "build:native:macos:universal": "node native/darwin/scripts/build-universal.mjs",
+    "postinstall": "node runtime/postinstall.cjs",
     "check:syntax": "node scripts/check-syntax.cjs",
-    "clean:native:macos": "node native/darwin/scripts/clean.mjs",
     "test": "node --test tests/*.test.cjs",
     "check": "npm run check:syntax && npm test",
-    "pack:windows": "node scripts/pack-windows.cjs",
-    "publish:windows": "node scripts/publish-windows.cjs",
-    "verify:windows:tarballs": "node scripts/verify-windows-tarballs.cjs",
-    "verify:native:macos": "node native/darwin/scripts/verify-runtime.mjs"
+    "pack:release": "node scripts/pack-release.cjs",
+    "publish:release": "node scripts/publish-release.cjs",
+    "verify:release": "node scripts/verify-release.cjs"
   },
   "peerDependencies": {
     "electron": "^22.3.27 || 43.x"
@@ -55,6 +53,9 @@
     }
   },
   "engines": {
-    "node": ">=16.17.1"
+    "node": ">=18"
+  },
+  "dependencies": {
+    "tar": "^7.5.22"
   }
 }

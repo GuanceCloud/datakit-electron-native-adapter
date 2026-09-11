@@ -1,68 +1,99 @@
-# macOS Native Runtime Build
+# macOS Precompiled Runtime Installation
 
-This npm repository contains only JavaScript build orchestration for the macOS
-Native runtime. The Apple Native SDK owns the Objective-C bridge header and
-implementation, the Objective-C++ Node-API addon source, and the SwiftPM
-`GuanceElectronNative` static library product.
+The Apple Native SDK owns and publishes the Objective-C bridge, Node-API addon,
+Native SDK code, resource bundles, runtime manifest, archive, and checksum. This
+npm package contains the JavaScript adapter and installation code; it does not
+ship macOS Native binaries or compile Native SDK source on the customer machine.
+
+## Mode boundary
+
+- Full (`managed`) mode explicitly installs the standalone runtime and lets
+  Electron own the Native SDK lifecycle.
+- Mixed (`external`) mode uses the Native host SDK through its bridge. Skip automatic
+  installation with `GUANCE_NATIVE_SKIP_DOWNLOAD=1` and do not load the managed runtime: it contains a statically
+  linked copy of the SDK and must not coexist with another SDK implementation
+  in the same process.
+
+Published npm packages run postinstall by default using the packaged Apple SDK tag. Set
+`GUANCE_NATIVE_RUNTIME_ARCHIVE` to install the same Release archive plus its adjacent
+`.sha256` offline instead. Set `GUANCE_NATIVE_SKIP_DOWNLOAD=1` explicitly for external-only
+apps or npm pipeline validation. There is no source-build fallback; a missing asset or
+failed validation reports an error.
 
 ## Customer command
 
-Installing this npm package exposes `ft-electron-native` through the
-application's local `node_modules/.bin` directory. From the application root,
-build the Electron-owned runtime with:
+Installing this npm package exposes `guance-electron-native` through the
+application's local `node_modules/.bin` directory. From the Electron application
+root, install a published Universal runtime with an explicit Native SDK version:
 
 ```sh
-npx ft-electron-native managed
+npx guance-electron-native --sdk-version <version>
 ```
 
-This command defaults to universal `arm64` plus `x86_64` output. It writes all
-customer build state below `.cloudcare/native/darwin` and publishes the runtime to
-`.cloudcare/native/darwin/runtime`; it does not modify `node_modules`. Use
-`--arch current`, `--arch arm64`, or `--arch x64` for a thin build. External
-mode has no command because the Native host owns the SDK and bridge lifecycle.
-
-## Native SDK source
-
-The customer CLI fetches `https://github.com/GuanceCloud/datakit-ios.git` at
-the exact `1.6.8-alpha.3` ref into the application's ignored
-`.cloudcare/native/darwin/.build` cache. The selected Native SDK source must
-expose:
+The explicit CLI requires a Native SDK version; postinstall instead uses the default tag
+configured in the published npm package. The installer downloads these two assets from
+the matching Native SDK GitHub Release:
 
 ```text
-Package.swift                                  # GuanceElectronNative product
-Sources/ElectronNative/Bridge/Public/GuanceElectronBridge.h
-Sources/ElectronNative/NodeAddon/guance_electron.mm
+guance-electron-runtime-<version>-darwin-universal.tar.gz
+guance-electron-runtime-<version>-darwin-universal.tar.gz.sha256
 ```
 
-During Native SDK development, select an existing checkout without changing or
-persisting the package dependency:
+The CLI validates SHA-256, archive entries, SDK version, architecture, manifest
+format, and runtime file hashes before replacing the installed directory.
+Downloads are cached under `.cloudcare/native/darwin/.cache` and rechecked on
+reuse. A failed download or validation leaves the existing runtime intact.
+
+Use a trusted HTTPS mirror when required:
 
 ```sh
-GUANCE_NATIVE_SDK_ROOT=/path/to/datakit-ios npx ft-electron-native managed --arch current
+npx guance-electron-native --sdk-version <version> \
+  --download-base-url https://downloads.example.com/native
 ```
 
-The equivalent CLI option is `--sdk-root /path/to/datakit-ios`. Repository and
-ref overrides are available through `GUANCE_NATIVE_SDK_REPOSITORY`,
-`GUANCE_NATIVE_SDK_REF`, `--sdk-repository`, and `--sdk-ref`. A release must use
-an immutable ref containing the required product and source paths. Until
-`1.6.8-alpha.3` is published, use the local checkout override for development.
+For local validation, provide an archive and its adjacent `.sha256` sidecar. The
+specified version must match the archive manifest:
 
-Set `GUANCE_ELECTRON_NODE_HEADERS` when `node_api.h` is not installed in a
-standard Node or Homebrew location.
+```sh
+npx guance-electron-native --sdk-version <version> \
+  --runtime-archive /path/to/guance-electron-runtime.tar.gz
+```
 
-## Output
+The mirror and archive options can also be provided through
+`GUANCE_NATIVE_RUNTIME_DOWNLOAD_BASE_URL` and `GUANCE_NATIVE_RUNTIME_ARCHIVE`.
+The Native SDK version must always be passed with `--sdk-version`.
 
-The customer command writes generated artifacts to
-`.cloudcare/native/darwin/runtime`:
+## Native SDK development
+
+Generate the archive from the Native SDK repository, which owns the build tools:
+
+```sh
+node scripts/build-electron-runtime.mjs
+```
+
+Then install that archive in the Electron application with its manifest version:
+
+```sh
+npx guance-electron-native --sdk-version <version> \
+  --runtime-archive /path/to/guance-electron-runtime-<version>-darwin-universal.tar.gz
+```
+
+The previous adapter `build:native:macos:*` scripts and `--sdk-root`, `--sdk-ref`,
+`--sdk-repository`, and `--debug` customer options have been removed. Source
+compilation and debugging belong to the Native SDK build command.
+
+## Installed runtime
 
 ```text
-runtime/
-├── guance_electron.node
-├── GuanceSDK__GuanceSDKCore.bundle/
-└── runtime-manifest.json
+.cloudcare/native/darwin/runtime/
+  guance_electron.node
+  GuanceSDK__GuanceSDKCore.bundle/
+  runtime-manifest.json
 ```
 
-The build links the Native SDK static product into the Node-API addon with
-`-Wl,-ObjC` so SDK Categories used by automatic instrumentation are retained.
-Customers do not configure linker flags. Package the runtime directory outside
-ASAR and sign the addon with the application's distribution identity.
+Pass this explicit CLI output as `native.directory`. Postinstall uses the equivalent
+path inside the npm package, which managed mode resolves automatically. The addon statically contains the
+Native SDK and targets Node-API 8. The manifest's minimum macOS version describes
+the addon; the selected Electron version may require a newer macOS version.
+Copy the complete directory outside ASAR when packaging, and sign the addon
+with the application's distribution identity.

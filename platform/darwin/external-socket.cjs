@@ -295,7 +295,7 @@ function createExternalSocketAdapter(options = {}) {
           capabilities = Object.freeze({
             protocolVersion: PROTOCOL_VERSION,
             rum: true,
-            log: false,
+            log: bridgeConfiguration.enableWebViewLog,
             replay,
             trace: false,
             replayPrivacy: replay ? bridgeConfiguration.privacyLevel : "mask",
@@ -381,7 +381,9 @@ function createExternalSocketAdapter(options = {}) {
       if (!state.visible || !state.hostAllowed) return;
       const event = parseBridgeEvent(serializedEvent);
       if (event.name === "log") {
-        throw new Error("macOS Mixed Mode does not expose Browser Log collection.");
+        if (!capabilities.log) {
+          throw new Error("Browser Log collection is not enabled by the Native host.");
+        }
       }
       if (event.name === "session_replay" && !capabilities.replay) {
         throw new Error("Browser Session Replay is not enabled by the Native host.");

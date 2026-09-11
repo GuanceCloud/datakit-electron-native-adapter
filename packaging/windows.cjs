@@ -19,7 +19,7 @@ function stageWindowsRuntime({ resourcesDirectory, nativeDirectory, arch = "x64"
     throw new Error(`Runtime staging destination must be empty: ${destination}`);
   }
   fs.mkdirSync(destination, { recursive: true });
-  for (const name of [...RUNTIME_FILES, "runtime-manifest.json"]) {
+  for (const name of [...RUNTIME_FILES, "runtime-manifest.json", "LICENSE"]) {
     const file = path.join(source, name);
     if (fs.existsSync(file)) fs.copyFileSync(file, path.join(destination, name));
   }

@@ -66,6 +66,7 @@ class FakeBinding {
   constructor(configuration = {}) {
     this.configuration = {
       enableTraceWebView: true,
+      enableWebViewLog: true,
       allowedWebViewHosts: ["example.com"],
       maximumMessageBytes: 1024 * 1024,
       capabilities: '["records"]',
@@ -188,6 +189,7 @@ test("macOS settings map to the existing Native API without changing public unit
   assert.deepEqual(mapped.logger, {
     sampleRate: 50,
     enableCustomLog: true,
+    enableWebViewLog: true,
     enableLinkRumData: true,
   });
   assert.deepEqual(mapped.trace, {
@@ -232,12 +234,14 @@ test("macOS settings map to the existing Native API without changing public unit
 test("macOS bridge configuration is validated and normalized", () => {
   const configuration = parseBridgeConfiguration(JSON.stringify({
     enableTraceWebView: true,
+    enableWebViewLog: true,
     allowedWebViewHosts: [" example.com "],
     maximumMessageBytes: 4096,
     capabilities: '["records"]',
     privacyLevel: "allow",
   }));
   assert.deepEqual(configuration.allowedWebViewHosts, ["example.com"]);
+  assert.equal(configuration.enableWebViewLog, true);
   assert.deepEqual(configuration.capabilities, ["records"]);
   assert.equal(configuration.privacyLevel, "allow");
   assert.throws(
@@ -292,15 +296,13 @@ test("macOS managed adapter owns Native startup, Browser forwarding, and shutdow
   assert.deepEqual(JSON.parse(binding.messages[1].message), [
     { handlerName: "sendEvent", data: replayEvent() },
   ]);
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(binding.invocations.at(-1), {
-    method: "logger.log",
-    payload: {
-      content: "Browser warning",
-      status: "warning",
-      attributes: { source: "renderer" },
-    },
-  });
+  assert.deepEqual(JSON.parse(binding.messages[2].message), [
+    { handlerName: "sendEvent", data: logEvent() },
+  ]);
+  assert.equal(
+    binding.invocations.some(({ method }) => method === "logger.log"),
+    false,
+  );
 
   binding.commandHandler(41, "takeSubsequentFullSnapshot");
   await new Promise((resolve) => setImmediate(resolve));
@@ -314,7 +316,7 @@ test("macOS managed adapter owns Native startup, Browser forwarding, and shutdow
   window.webContents.emit("did-start-navigation", {}, "https://blocked.invalid/", false, true);
   assert.equal(binding.updates.at(-1).visible, false);
   adapter.sendBrowserEvent(registration, rumEvent());
-  assert.equal(binding.messages.length, 2);
+  assert.equal(binding.messages.length, 3);
 
   adapter.updateWebContents(registration, { visible: false, zIndex: 3 });
   assert.equal(binding.updates.at(-1).zIndex, 3);
@@ -397,4 +399,14 @@ test("macOS managed startup fails closed and shuts down a partially initialized 
   assert.equal(adapter.getState().writable, false);
   await adapter.stop();
   assert.deepEqual(errors, []);
+});
+
+test("macOS managed startup requires the Native Browser Log bridge when logging is enabled", async () => {
+  const binding = new FakeBinding({ enableWebViewLog: false });
+  const adapter = createManagedAdapter({ settings: settings(), binding });
+
+  await assert.rejects(adapter.start(), /Native Browser Log bridge is disabled/);
+  assert.equal(binding.invocations.at(-1).method, "sdk.shutdown");
+  assert.equal(adapter.getState().writable, false);
+  await adapter.stop();
 });

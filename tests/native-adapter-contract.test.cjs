@@ -83,6 +83,7 @@ test("public package exposes bootstrap and only supported subpaths", () => {
     ".",
     "./main",
     "./packaging/windows",
+    "./packaging/macos",
     "./preload/install",
     "./preload/standalone",
   ]);

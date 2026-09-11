@@ -4,13 +4,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 
-function npm(args, cwd) {
+function npm(args, cwd, { environment = process.env } = {}) {
   // Avoid cmd.exe argument interpolation on Windows, including paths containing spaces.
   const cli = process.env.npm_execpath || path.join(path.dirname(process.execPath), "node_modules/npm/bin/npm-cli.js");
   if (!fs.existsSync(cli)) throw new Error("Cannot locate npm-cli.js. Run this command through npm run.");
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cli, ...args], {
-      cwd, windowsHide: true, env: { ...process.env, npm_config_audit: "false", npm_config_fund: "false" },
+      cwd, windowsHide: true, env: { ...environment, npm_config_audit: "false", npm_config_fund: "false" },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let output = "";
