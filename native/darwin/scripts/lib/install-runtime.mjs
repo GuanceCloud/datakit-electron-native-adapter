@@ -5,12 +5,12 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { extract } from 'tar'
 
-export const DEFAULT_NATIVE_SDK_VERSION = '1.6.8-alpha.3'
 export const DEFAULT_DOWNLOAD_BASE_URL = 'https://github.com/GuanceCloud/datakit-ios/releases/download'
 const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 
-export function runtimeRelease({ sdkVersion = DEFAULT_NATIVE_SDK_VERSION,
+export function runtimeRelease({ sdkVersion,
   downloadBaseURL = DEFAULT_DOWNLOAD_BASE_URL } = {}) {
+  if (!sdkVersion) throw new Error('Native SDK version is required')
   if (!/^v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/u.test(sdkVersion)) {
     throw new Error('Invalid Native SDK version: ' + sdkVersion)
   }

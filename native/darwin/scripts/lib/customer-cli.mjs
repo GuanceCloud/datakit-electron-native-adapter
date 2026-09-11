@@ -1,14 +1,14 @@
 import path from 'node:path'
-import { DEFAULT_NATIVE_SDK_VERSION, DEFAULT_DOWNLOAD_BASE_URL, installManagedRuntime, runtimeRelease } from './install-runtime.mjs'
+import { DEFAULT_DOWNLOAD_BASE_URL, installManagedRuntime, runtimeRelease } from './install-runtime.mjs'
 
 export const CLI_USAGE = [
-  'Usage: ft-electron-native managed [options]',
+  'Usage: guance-electron-native --sdk-version <version> [options]',
   '',
   'Downloads and installs the precompiled Universal macOS runtime for full (managed) mode.',
   'Mixed (external) mode uses the Native host SDK and must not install this runtime.',
   '',
   'Options:',
-  '  --sdk-version <version>              Override the pinned Native SDK release',
+  '  --sdk-version <version>              Native SDK release version (required)',
   '  --download-base-url <https-url>       Override the release download base (mirror)',
   '  --runtime-archive <path>              Install a local archive with its .sha256 sidecar',
   '  -h, --help                            Show this help',
@@ -21,9 +21,7 @@ export function parseCustomerCLIArguments(argv, environment = process.env) {
   if (argv[0] === 'external') {
     throw new CLIUsageError('External mode uses the Native host SDK and does not install a managed runtime')
   }
-  if (argv[0] !== 'managed') throw new CLIUsageError('Expected the managed command')
   const options = {
-    sdkVersion: environment.GUANCE_NATIVE_SDK_VERSION || DEFAULT_NATIVE_SDK_VERSION,
     downloadBaseURL: environment.GUANCE_NATIVE_RUNTIME_DOWNLOAD_BASE_URL || DEFAULT_DOWNLOAD_BASE_URL,
     runtimeArchive: environment.GUANCE_NATIVE_RUNTIME_ARCHIVE,
   }
@@ -33,7 +31,7 @@ export function parseCustomerCLIArguments(argv, environment = process.env) {
     '--runtime-archive': 'runtimeArchive',
   }
   const seen = new Set()
-  for (let index = 1; index < argv.length; index += 1) {
+  for (let index = 0; index < argv.length; index += 1) {
     const [name, ...assignment] = argv[index].split('=')
     if (!names[name]) throw new CLIUsageError('Unknown argument: ' + name)
     if (seen.has(name)) throw new CLIUsageError(name + ' may only be specified once')
@@ -42,6 +40,7 @@ export function parseCustomerCLIArguments(argv, environment = process.env) {
     if (!value || value.startsWith('--')) throw new CLIUsageError(name + ' requires a value')
     options[names[name]] = value
   }
+  if (!options.sdkVersion) throw new CLIUsageError('--sdk-version is required')
   runtimeRelease(options)
   return { installOptions: options, help: false }
 }

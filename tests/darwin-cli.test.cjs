@@ -8,21 +8,22 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const test = require("node:test");
 const root = path.resolve(__dirname, "..");
-const cliPath = path.join(root, "bin/ft-electron-native.mjs");
+const cliPath = path.join(root, "bin/guance-electron-native.mjs");
 const cliModule = () => import(pathToFileURL(path.join(root, "native/darwin/scripts/lib/customer-cli.mjs")).href);
 
-test("customer CLI defaults to a pinned precompiled Universal runtime", async () => {
+test("customer CLI requires an explicit Native SDK version", async () => {
   const { parseCustomerCLIArguments } = await cliModule();
-  const parsed = parseCustomerCLIArguments(["managed"], {});
-  assert.equal(parsed.installOptions.sdkVersion, "1.6.8-alpha.3");
-  assert.equal("architecture" in parsed.installOptions, false);
-  assert.equal(parsed.installOptions.runtimeArchive, undefined);
+  assert.throws(() => parseCustomerCLIArguments([], {}), /--sdk-version is required/u);
+  assert.throws(
+    () => parseCustomerCLIArguments([], { GUANCE_NATIVE_SDK_VERSION: "1.6.8" }),
+    /--sdk-version is required/u,
+  );
 });
 
 test("customer CLI supports versions, mirrors, and local Universal archives", async () => {
   const { parseCustomerCLIArguments } = await cliModule();
   const parsed = parseCustomerCLIArguments([
-    "managed", "--sdk-version", "1.6.8",
+    "--sdk-version", "1.6.8",
     "--download-base-url", "https://downloads.example.com/native",
     "--runtime-archive", "/tmp/runtime.tar.gz",
   ], {});
@@ -34,8 +35,8 @@ test("customer CLI supports versions, mirrors, and local Universal archives", as
 test("customer CLI rejects mixed-mode installation and removed build or architecture options", async () => {
   const { parseCustomerCLIArguments } = await cliModule();
   assert.throws(() => parseCustomerCLIArguments(["external"], {}), /Native host SDK.*does not install/u);
-  for (const option of ["--arch", "--sdk-root", "--sdk-repository", "--debug"]) {
-    assert.throws(() => parseCustomerCLIArguments(["managed", option, "/tmp/sdk"], {}), /Unknown argument/u);
+  for (const option of ["managed", "--arch", "--sdk-root", "--sdk-repository", "--debug"]) {
+    assert.throws(() => parseCustomerCLIArguments([option, "/tmp/sdk"], {}), /Unknown argument/u);
   }
 });
 
@@ -45,7 +46,7 @@ test("CLI awaits installation into the customer application, without a build req
   let request;
   const messages = [];
   const result = await runCustomerCLI({
-    argv: ["managed"], cwd: applicationRoot, environment: {},
+    argv: ["--sdk-version", "1.6.8"], cwd: applicationRoot, environment: {},
     async install(value) {
       request = value;
       await Promise.resolve();
@@ -54,6 +55,7 @@ test("CLI awaits installation into the customer application, without a build req
     write(message) { messages.push(message); },
   });
   assert.equal(request.applicationRoot, applicationRoot);
+  assert.equal(request.options.sdkVersion, "1.6.8");
   assert.equal("architecture" in request.options, false);
   assert.equal(result.output, path.join(applicationRoot, ".cloudcare/native/darwin/runtime"));
   assert.match(messages[0], /Installed the Universal/u);
@@ -79,8 +81,8 @@ test("customer executable prints help without any compiler in PATH", () => {
 
 test("npm package remains JavaScript-only with no automatic runtime installation", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-  assert.equal(pkg.bin["ft-electron-native"], "bin/ft-electron-native.mjs");
-  assert.equal(pkg.peerDependencies.electron, ">=22");
+  assert.equal(pkg.bin["guance-electron-native"], "bin/guance-electron-native.mjs");
+  assert.equal(pkg.peerDependencies.electron, "^22.3.27 || 43.x");
   assert.equal(pkg.scripts.install, undefined);
   assert.equal(pkg.scripts.postinstall, undefined);
   assert.equal(pkg.files.some((file) => file.endsWith(".node") || file === "native/darwin/runtime"), false);

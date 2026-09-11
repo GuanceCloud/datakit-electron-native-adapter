@@ -11,7 +11,7 @@
   "type": "commonjs",
   "main": "main/index.cjs",
   "bin": {
-    "ft-electron-native": "bin/ft-electron-native.mjs"
+    "guance-electron-native": "bin/guance-electron-native.mjs"
   },
   "exports": {
     ".": "./main/index.cjs",

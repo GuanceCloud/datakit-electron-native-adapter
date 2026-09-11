@@ -10,6 +10,7 @@ const test = require("node:test");
 const tar = require("tar");
 const installModule = () => import(pathToFileURL(path.join(__dirname, "../native/darwin/scripts/lib/install-runtime.mjs")).href);
 const hash = (data) => createHash("sha256").update(data).digest("hex");
+const sdkVersion = "9.8.7-test.1";
 
 async function fixture(t, manifestOverrides = {}, extraEntry) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "guance-runtime-install-"));
@@ -24,7 +25,7 @@ async function fixture(t, manifestOverrides = {}, extraEntry) {
   for (const [name, data] of Object.entries(files)) fs.writeFileSync(path.join(runtime, name), data);
   const manifest = {
     schemaVersion: 1, mode: "managed", platform: "darwin", nativeSDKLinkage: "static",
-    configuration: "release", nativeSDK: { version: "1.6.8-alpha.3" },
+    configuration: "release", nativeSDK: { version: sdkVersion },
     architectures: ["arm64", "x86_64"], nodeAPIVersion: 8, minimumMacOSVersion: "10.14",
     files: Object.fromEntries(Object.entries(files).map(([name, data]) => [name, hash(data)])),
     ...manifestOverrides,
@@ -44,7 +45,7 @@ test("installs a Native SDK archive without invoking any native tools", async (t
   const { installManagedRuntime } = await installModule();
   const output = await installManagedRuntime({
     applicationRoot: data.applicationRoot,
-    options: { runtimeArchive: data.archive },
+    options: { sdkVersion, runtimeArchive: data.archive },
     fetchImpl() { throw new Error("Local installation must not download"); },
   });
   assert.equal(output, data.output);
@@ -59,11 +60,15 @@ test("downloads fixed release assets and reuses a verified archive cache", async
     urls.push(url);
     return new Response(fs.readFileSync(url.endsWith(".sha256") ? data.archive + ".sha256" : data.archive));
   };
-  await installManagedRuntime({ applicationRoot: data.applicationRoot, fetchImpl });
+  await installManagedRuntime({ applicationRoot: data.applicationRoot, options: { sdkVersion }, fetchImpl });
   assert.equal(urls.length, 2);
-  assert.match(urls[1], /\/1\.6\.8-alpha\.3\/guance-electron-runtime-1\.6\.8-alpha\.3-darwin-universal\.tar\.gz$/u);
+  assert.equal(
+    urls[1],
+    `https://github.com/GuanceCloud/datakit-ios/releases/download/${sdkVersion}/guance-electron-runtime-${sdkVersion}-darwin-universal.tar.gz`,
+  );
   await installManagedRuntime({
     applicationRoot: data.applicationRoot,
+    options: { sdkVersion },
     fetchImpl() { throw new Error("Verified cache should avoid download"); },
   });
   assert.ok(fs.existsSync(path.join(data.output, "guance_electron.node")));
@@ -76,7 +81,7 @@ test("checksum failure preserves an existing runtime", async (t) => {
   fs.writeFileSync(path.join(data.output, "previous"), "keep");
   fs.appendFileSync(data.archive, "corruption");
   await assert.rejects(installManagedRuntime({
-    applicationRoot: data.applicationRoot, options: { runtimeArchive: data.archive },
+    applicationRoot: data.applicationRoot, options: { sdkVersion, runtimeArchive: data.archive },
   }), /SHA-256 mismatch/u);
   assert.equal(fs.readFileSync(path.join(data.output, "previous"), "utf8"), "keep");
 });
@@ -89,7 +94,7 @@ test("rejects a non-Universal runtime, mismatched SDK version, linkage, and file
   ]) {
     const data = await fixture(t, overrides);
     await assert.rejects(installManagedRuntime({
-      applicationRoot: data.applicationRoot, options: { runtimeArchive: data.archive },
+      applicationRoot: data.applicationRoot, options: { sdkVersion, runtimeArchive: data.archive },
     }), /manifest|checksums/u);
     assert.equal(fs.existsSync(data.output), false);
   }
@@ -101,7 +106,7 @@ test("rejects archive symlinks before exposing a runtime", async (t) => {
   });
   const { installManagedRuntime } = await installModule();
   await assert.rejects(installManagedRuntime({
-    applicationRoot: data.applicationRoot, options: { runtimeArchive: data.archive },
+    applicationRoot: data.applicationRoot, options: { sdkVersion, runtimeArchive: data.archive },
   }), /Invalid runtime archive entry/u);
   assert.equal(fs.existsSync(data.output), false);
 });
@@ -110,7 +115,8 @@ test("missing release fails without any source-build fallback", async (t) => {
   const data = await fixture(t);
   const { installManagedRuntime } = await installModule();
   await assert.rejects(installManagedRuntime({
-    applicationRoot: data.applicationRoot, fetchImpl: async () => new Response("", { status: 404 }),
+    applicationRoot: data.applicationRoot, options: { sdkVersion },
+    fetchImpl: async () => new Response("", { status: 404 }),
   }), /HTTP 404/u);
   assert.equal(fs.existsSync(data.output), false);
   assert.equal(fs.existsSync(path.join(path.dirname(data.output), ".install-lock")), false);
@@ -118,8 +124,9 @@ test("missing release fails without any source-build fallback", async (t) => {
 
 test("rejects unsafe version and mirror input before making a request", async () => {
   const { runtimeRelease } = await installModule();
+  assert.throws(() => runtimeRelease(), /version is required/u);
   assert.throws(() => runtimeRelease({ sdkVersion: "../../main" }), /Invalid Native SDK version/u);
-  assert.throws(() => runtimeRelease({ downloadBaseURL: "http://example.com" }), /HTTPS/u);
+  assert.throws(() => runtimeRelease({ sdkVersion, downloadBaseURL: "http://example.com" }), /HTTPS/u);
 });
 
 test("a downloaded archive with an invalid manifest is not cached", async (t) => {
@@ -127,6 +134,7 @@ test("a downloaded archive with an invalid manifest is not cached", async (t) =>
   const { installManagedRuntime } = await installModule();
   await assert.rejects(installManagedRuntime({
     applicationRoot: data.applicationRoot,
+    options: { sdkVersion },
     fetchImpl: async (url) => new Response(fs.readFileSync(url.endsWith(".sha256") ? data.archive + ".sha256" : data.archive)),
   }), /manifest/u);
   assert.deepEqual(fs.readdirSync(path.join(path.dirname(data.output), ".cache")), []);
