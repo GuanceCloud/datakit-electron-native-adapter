@@ -8,11 +8,11 @@ export const CLI_USAGE = [
   'Mixed (external) mode uses the Native host SDK and must not install this runtime.',
   '',
   'Options:',
-  '  --sdk-version <version>              Native SDK release version (required)',
+  '  --sdk-version <tag>                  Exact SDK tag (Windows also accepts nuget_ / vcpkg_)',
   '  --download-base-url <https-url>       Override the release download base (mirror)',
   '  --runtime-archive <path>              Install a local archive with its .sha256 sidecar',
   '  --target <darwin-universal|win32-x64>  Override the current platform',
-  '  --asset-name <filename.tar.gz>        Exact Release filename (required for Windows remote installs)',
+  '  --asset-name <filename.tar.gz>        Override the version-derived Release filename',
   '  -h, --help                            Show this help',
 ].join('\n')
 

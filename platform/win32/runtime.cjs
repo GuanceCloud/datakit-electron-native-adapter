@@ -87,7 +87,7 @@ function resolveWindowsRuntime({
   const runtime = fs.existsSync(installed) ? installed : path.join(packageRoot, RUNTIME_SUBDIRECTORY);
   assertOutsideAsar(runtime);
   if (!fs.existsSync(runtime)) {
-    throw new Error(`Missing downloaded Windows runtime in ${PACKAGE_NAME}@${version}. Run npx guance-electron-native --sdk-version <version> --target win32-x64 --asset-name <asset.tar.gz>, then set native.directory to the installed runtime.`);
+    throw new Error(`Missing downloaded Windows runtime in ${PACKAGE_NAME}@${version}. Run npx guance-electron-native --sdk-version <sdk-tag> --target win32-x64, then set native.directory to the installed runtime.`);
   }
   validateRuntime(runtime);
   return runtime;

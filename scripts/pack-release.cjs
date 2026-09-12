@@ -4,7 +4,7 @@ const path = require("node:path");
 const { npm } = require("./npm-command.cjs");
 const { sourceRevision, argumentsFor, writeJSON, emptyOutput } = require("./release-common.cjs");
 const { validatePackageMetadata, validVersion } = require("./github-release-artifact.cjs");
-const { validateDefaults } = require("../runtime/config.cjs");
+const { validateDefaults, defaultAssetName } = require("../runtime/config.cjs");
 
 async function packRelease({ version, output, allowDirty = false, pipelineOnly = false, macosSdkVersion, windowsSdkVersion, windowsAssetName, root = path.resolve(__dirname, "..") }) {
   if (!validVersion(version)) throw new Error("Provide an explicit valid --version.");
@@ -17,7 +17,16 @@ async function packRelease({ version, output, allowDirty = false, pipelineOnly =
   metadata.scripts = { postinstall: "node runtime/postinstall.cjs" };
   const targets = { ...(metadata.nativeRuntime?.targets || {}) };
   if (macosSdkVersion) targets["darwin-universal"] = { sdkVersion: macosSdkVersion };
-  if (windowsSdkVersion || windowsAssetName) targets["win32-x64"] = { sdkVersion: windowsSdkVersion, assetName: windowsAssetName };
+  const previous = targets["win32-x64"] || {};
+  if (windowsSdkVersion || windowsAssetName) {
+    const derived = previous.sdkVersion && previous.assetName === defaultAssetName(previous.sdkVersion, "win32-x64");
+    targets["win32-x64"] = { ...previous, sdkVersion: windowsSdkVersion || previous.sdkVersion,
+      assetName: windowsAssetName || (derived ? undefined : previous.assetName) };
+  }
+  const windows = targets["win32-x64"];
+  if (windows?.sdkVersion && !windows.assetName) {
+    targets["win32-x64"] = { ...windows, assetName: defaultAssetName(windows.sdkVersion, "win32-x64") };
+  }
   metadata.nativeRuntime = validateDefaults({ schemaVersion: 1, pipelineOnly, targets }, version);
   validatePackageMetadata(metadata, version);
   const main = path.join(destination, "main");

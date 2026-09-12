@@ -110,3 +110,32 @@ test("actual npm postinstall installs a supplied offline SDK archive without ski
   const runtime = installedDirectory(path.join(consumer, "node_modules", f.metadata.name), "darwin-universal");
   assert.deepEqual(fs.readFileSync(path.join(runtime, "guance_electron.node")), payload["guance_electron.node"]);
 });
+
+test("npm pack records the derived Windows filename and supports partial configured overrides", async (t) => {
+  const f = fixture(t);
+  t.mock.method(console, "log", () => {});
+  const output = path.join(f.root, "derived-pack");
+  await packRelease({ version: VERSION, output, allowDirty: true, pipelineOnly: true,
+    windowsSdkVersion: "vcpkg_0.1.0-alpha.7" });
+  const metadata = readReleaseArtifact(output, { allowDirty: true }).metadata;
+  assert.deepEqual(metadata.nativeRuntime.targets["win32-x64"], {
+    sdkVersion: "vcpkg_0.1.0-alpha.7", assetName: "guance-electron-runtime-0.1.0-alpha.7-win32-x64.tar.gz",
+  });
+  // Use the actual packed source as a configured project, with source provenance.
+  const { execFileSync } = require("node:child_process");
+  const source = path.join(output, "main");
+  execFileSync("git", ["init", source], { stdio: "pipe" });
+  execFileSync("git", ["-C", source, "add", "."], { stdio: "pipe" });
+  execFileSync("git", ["-C", source, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture"], { stdio: "pipe" });
+  const fixedOutput = path.join(f.root, "fixed-name-pack");
+  await packRelease({ root: source, version: VERSION, output: fixedOutput, pipelineOnly: true,
+    windowsAssetName: "fixed-runtime.tar.gz" });
+  assert.deepEqual(readReleaseArtifact(fixedOutput).metadata.nativeRuntime.targets["win32-x64"], {
+    sdkVersion: "vcpkg_0.1.0-alpha.7", assetName: "fixed-runtime.tar.gz",
+  });
+  const nextOutput = path.join(f.root, "next-version-pack");
+  await packRelease({ root: source, version: VERSION, output: nextOutput, pipelineOnly: true,
+    windowsSdkVersion: "nuget_0.1.0-alpha.8" });
+  assert.equal(readReleaseArtifact(nextOutput).metadata.nativeRuntime.targets["win32-x64"].assetName,
+    "guance-electron-runtime-0.1.0-alpha.8-win32-x64.tar.gz");
+});

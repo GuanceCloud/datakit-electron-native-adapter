@@ -5,6 +5,7 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { extract } from 'tar'
 import windowsRuntime from '../../../../platform/win32/runtime.cjs'
+import runtimeConfig from '../../../../runtime/config.cjs'
 
 export const DEFAULT_DOWNLOAD_BASE_URL = 'https://github.com/GuanceCloud/datakit-ios/releases/download'
 export const WINDOWS_DOWNLOAD_BASE_URL = 'https://github.com/GuanceCloud/datakit-windows-desktop/releases/download'
@@ -14,16 +15,12 @@ export function runtimeRelease({ sdkVersion, target = 'darwin-universal', assetN
   downloadBaseURL = target === 'win32-x64' ? WINDOWS_DOWNLOAD_BASE_URL : DEFAULT_DOWNLOAD_BASE_URL } = {}) {
   if (!['darwin-universal', 'win32-x64'].includes(target)) throw new Error('Unsupported runtime target: ' + target)
   if (!sdkVersion) throw new Error('Native SDK version is required')
-  if (!/^v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/u.test(sdkVersion)) {
-    throw new Error('Invalid Native SDK version: ' + sdkVersion)
-  }
+  const version = runtimeConfig.sdkVersionForTag(sdkVersion, target)
   const base = new URL(downloadBaseURL)
   if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) {
     throw new Error('Runtime download base must be an HTTPS URL without credentials, query, or fragment')
   }
-  const version = sdkVersion.replace(/^v/u, '')
-  if (target === 'win32-x64' && !assetName) throw new Error('Windows remote installation requires --asset-name with the exact SDK Release .tar.gz filename')
-  const filename = assetName || 'guance-electron-runtime-' + version + '-darwin-universal.tar.gz'
+  const filename = assetName || runtimeConfig.defaultAssetName(sdkVersion, target)
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.tar\.gz$/u.test(filename)) throw new Error('Asset name must be a .tar.gz filename without a directory')
   return {
     version, filename, target,

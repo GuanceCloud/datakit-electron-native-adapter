@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Derive Windows runtime Release filenames from SDK versions and accept native `nuget_` / `vcpkg_` release tags while preserving their URL spelling.
+- Preserve configured Windows settings when overriding only the SDK tag or asset name during npm packing.
+- Add `verify:windows` to validate offline npm installation, real managed bridge startup, runtime staging and an optional sandboxed Electron Renderer against a trusted SDK archive.
+
 ## 0.1.0-alpha.1
 
 First alpha release of `@cloudcare/electron-native-adapter`.
@@ -20,4 +26,4 @@ First alpha release of `@cloudcare/electron-native-adapter`.
 - Downloaded Windows binaries support x64 and require the Microsoft Visual C++ v14 x64 Redistributable and Windows Universal CRT.
 - macOS managed mode uses a downloaded Universal runtime; application-owned source builds remain supported via an explicit directory. Neither platform's native binaries are bundled in npm.
 - Linux is not supported. This alpha release is intended for integration testing.
-- npm installation and the runtime installer require Node.js 18+; the adapter runtime retains its Electron 22/Node.js 16.17.1 baseline. Windows remote asset naming and live native acceptance remain pending.
+- npm installation and the runtime installer require Node.js 18+; the adapter runtime retains its Electron 22/Node.js 16.17.1 baseline. Public Windows Release availability must be verified independently of local native acceptance.

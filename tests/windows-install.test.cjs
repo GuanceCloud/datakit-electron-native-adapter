@@ -67,10 +67,9 @@ test("Windows flat archives install via the public CLI without a Release filenam
   assert.ok(fs.existsSync(path.join(f.output, "guance_windows_native.dll")));
 });
 
-test("Windows rejects missing filenames, unsafe targets, wrong versions and missing checksums", async (t) => {
+test("Windows rejects unsafe targets, wrong versions and missing checksums", async (t) => {
   const f = await fixture(t);
   const { runtimeRelease, installManagedRuntime } = await installer();
-  assert.throws(() => runtimeRelease({ sdkVersion, target: "win32-x64" }), /--asset-name/);
   assert.throws(() => runtimeRelease({ sdkVersion, target: "linux" }), /Unsupported runtime target/);
   assert.throws(() => runtimeRelease({ sdkVersion, target: "win32-x64", assetName: "../file.tar.gz" }), /filename/);
   assert.throws(() => runtimeRelease({ sdkVersion, target: "win32-x64", assetName: "file.zip" }), /tar.gz/);
@@ -79,6 +78,43 @@ test("Windows rejects missing filenames, unsafe targets, wrong versions and miss
   assert.equal(fs.existsSync(f.output), false);
   fs.unlinkSync(f.archive + ".sha256");
   await assert.rejects(installManagedRuntime({ applicationRoot: f.applicationRoot, options: { ...options, sdkVersion } }), /ENOENT/);
+});
+
+test("Windows derives asset names and preserves release stream tags in download URLs", async () => {
+  const { runtimeRelease } = await installer();
+  for (const tag of ["0.1.0-alpha.7", "v0.1.0-alpha.7", "nuget_0.1.0-alpha.7", "vcpkg_0.1.0-alpha.7"]) {
+    const release = runtimeRelease({ sdkVersion: tag, target: "win32-x64" });
+    assert.equal(release.version, "0.1.0-alpha.7");
+    assert.equal(release.filename, "guance-electron-runtime-0.1.0-alpha.7-win32-x64.tar.gz");
+    assert.equal(release.url, `https://github.com/GuanceCloud/datakit-windows-desktop/releases/download/${tag}/${release.filename}`);
+  }
+  for (const tag of ["nuget_01.0.0", "nuget_0.1.0-alpha.0", "vcpkg_0.1.0-rc.1", "nuget_v0.1.0", "other_0.1.0"]) {
+    assert.throws(() => runtimeRelease({ sdkVersion: tag, target: "win32-x64" }), /Invalid Native SDK version/);
+  }
+  assert.throws(() => runtimeRelease({ sdkVersion: "nuget_0.1.0", target: "darwin-universal" }), /Invalid Native SDK version/);
+});
+
+test("Windows stream-tag downloads use the derived filename and validate the manifest version", async (t) => {
+  const f = await fixture(t);
+  const manifestPath = path.join(f.root, "source/runtime/runtime-manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath));
+  manifest.sdkVersion = "0.1.0-alpha.7";
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  await tar.create({ gzip: true, portable: true, cwd: path.join(f.root, "source"), file: f.archive }, ["runtime"]);
+  fs.writeFileSync(f.archive + ".sha256", hash(fs.readFileSync(f.archive)));
+  const { installManagedRuntime } = await installer();
+  const urls = [];
+  const options = { target: "win32-x64", sdkVersion: "vcpkg_0.1.0-alpha.7" };
+  await installManagedRuntime({ applicationRoot: f.applicationRoot, options, fetchImpl: async (url) => {
+    urls.push(url);
+    return new Response(fs.readFileSync(url.endsWith(".sha256") ? f.archive + ".sha256" : f.archive));
+  } });
+  assert.match(urls[1], /\/vcpkg_0\.1\.0-alpha\.7\/guance-electron-runtime-0\.1\.0-alpha\.7-win32-x64\.tar\.gz$/);
+  const before = fs.readFileSync(path.join(f.output, "runtime-manifest.json"));
+  await assert.rejects(installManagedRuntime({ applicationRoot: f.applicationRoot,
+    options: { ...options, sdkVersion: "nuget_0.1.0-alpha.6", runtimeArchive: f.archive },
+    fetchImpl() { throw Error("No network fallback"); } }), /SDK version/);
+  assert.deepEqual(fs.readFileSync(path.join(f.output, "runtime-manifest.json")), before);
 });
 
 test("CLI chooses the platform repository and supports cross-platform targets", async () => {
