@@ -56,6 +56,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Publish and verify npm integrity
+        id: npm_publish
         run: npm run publish:github -- publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Notify DingTalk after verified npm publication
+        if: success() && steps.npm_publish.outcome == 'success'
+        run: node scripts/notify-dingtalk.cjs
+        env:
+          FT_SDK_DINGTALK_WEBHOOK_TOKEN: ${{ secrets.FT_SDK_DINGTALK_WEBHOOK_TOKEN }}

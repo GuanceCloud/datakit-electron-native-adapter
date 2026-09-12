@@ -36,11 +36,22 @@ async function main(stage, env = process.env) {
   } else if (stage === "publish") {
     const saved = JSON.parse(fs.readFileSync(path.join(directory, "github-release-context.json"), "utf8"));
     if (saved.sha !== sha || saved.version !== options.version || saved.tag !== options.tag) throw new Error("Prepared artifact context does not match this release.");
-    await publishRelease({ directory, registry: "https://registry.npmjs.org/", tag: options.tag, access: "public", execute: true });
+    await publishCandidate(directory, options, sha, env);
   } else {
     throw new Error("Use prepare or publish.");
   }
 }
 
+async function publishCandidate(directory, options, sha, env, publish = publishRelease) {
+  const receipt = path.join(directory, "npm-publication.json");
+  fs.rmSync(receipt, { force: true });
+  const result = await publish({ directory, registry: "https://registry.npmjs.org/", tag: options.tag, access: "public", execute: true });
+  if (!result?.published && !result?.existing) throw new Error("npm publication was not confirmed.");
+  const report = JSON.parse(fs.readFileSync(path.join(directory, "pack-report.json"), "utf8"));
+  fs.writeFileSync(receipt, JSON.stringify({ schemaVersion: 1, npm: "verified", sha, version: options.version,
+    tag: options.tag, name: report.package.name, integrity: report.package.integrity,
+    repository: env.GITHUB_REPOSITORY, runId: env.GITHUB_RUN_ID, runAttempt: env.GITHUB_RUN_ATTEMPT }) + "\n");
+}
+
 if (require.main === module) main(process.argv[2]).catch((error) => { console.error(error.message); process.exitCode = 1; });
-module.exports = { releaseOptions };
+module.exports = { releaseOptions, publishCandidate };
