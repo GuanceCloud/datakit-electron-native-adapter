@@ -24,6 +24,7 @@ test("customer CLI supports versions, mirrors, and local Universal archives", as
   const { parseCustomerCLIArguments } = await cliModule();
   const parsed = parseCustomerCLIArguments([
     "--sdk-version", "1.6.8",
+    "--target", "darwin-universal",
     "--download-base-url", "https://downloads.example.com/native",
     "--runtime-archive", "/tmp/runtime.tar.gz",
   ], {});
@@ -46,7 +47,7 @@ test("CLI awaits installation into the customer application, without a build req
   let request;
   const messages = [];
   const result = await runCustomerCLI({
-    argv: ["--sdk-version", "1.6.8"], cwd: applicationRoot, environment: {},
+    argv: ["--sdk-version", "1.6.8", "--target", "darwin-universal"], cwd: applicationRoot, environment: {},
     async install(value) {
       request = value;
       await Promise.resolve();
@@ -58,7 +59,7 @@ test("CLI awaits installation into the customer application, without a build req
   assert.equal(request.options.sdkVersion, "1.6.8");
   assert.equal("architecture" in request.options, false);
   assert.equal(result.output, path.join(applicationRoot, ".cloudcare/native/darwin/runtime"));
-  assert.match(messages[0], /Installed the Universal/u);
+  assert.match(messages[0], /Installed the managed/u);
 });
 
 test("mixed mode fails before calling the installer", async () => {
@@ -79,11 +80,11 @@ test("customer executable prints help without any compiler in PATH", () => {
   assert.match(result.stdout, /Universal/u);
 });
 
-test("npm package remains JavaScript-only with no automatic runtime installation", () => {
+test("npm package remains JavaScript-only and installs its runtime through postinstall", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   assert.equal(pkg.bin["guance-electron-native"], "bin/guance-electron-native.mjs");
   assert.equal(pkg.peerDependencies.electron, "^22.3.27 || 43.x");
   assert.equal(pkg.scripts.install, undefined);
-  assert.equal(pkg.scripts.postinstall, undefined);
+  assert.equal(pkg.scripts.postinstall, "node runtime/postinstall.cjs");
   assert.equal(pkg.files.some((file) => file.endsWith(".node") || file === "native/darwin/runtime"), false);
 });

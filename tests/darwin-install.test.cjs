@@ -100,7 +100,7 @@ test("rejects a non-Universal runtime, mismatched SDK version, linkage, and file
   }
 });
 
-test("rejects archive symlinks before exposing a runtime", async (t) => {
+test("rejects archive symlinks before exposing a runtime", { skip: process.platform === "win32" }, async (t) => {
   const data = await fixture(t, {}, (runtime, root) => {
     fs.symlinkSync(root, path.join(runtime, "outside"));
   });

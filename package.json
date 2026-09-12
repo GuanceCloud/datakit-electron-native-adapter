@@ -17,11 +17,13 @@
     ".": "./main/index.cjs",
     "./main": "./main/index.cjs",
     "./packaging/windows": "./packaging/windows.cjs",
+    "./packaging/macos": "./packaging/macos.cjs",
     "./preload/install": "./preload/install.cjs",
     "./preload/standalone": "./preload/standalone.cjs"
   },
   "files": [
     "README.md",
+    "CHANGELOG.md",
     "bin",
     "core",
     "main",
@@ -29,17 +31,19 @@
     "internal",
     "platform",
     "packaging",
+    "runtime",
     "native/darwin/README.md",
-    "native/darwin/scripts",
-    "native/win32-x64"
+    "native/darwin/scripts"
   ],
   "scripts": {
+    "postinstall": "node runtime/postinstall.cjs",
     "check:syntax": "node scripts/check-syntax.cjs",
     "test": "node --test tests/*.test.cjs",
     "check": "npm run check:syntax && npm test",
-    "pack:windows": "node scripts/pack-windows.cjs",
-    "publish:windows": "node scripts/publish-windows.cjs",
-    "verify:windows:tarballs": "node scripts/verify-windows-tarballs.cjs"
+    "pack:release": "node scripts/pack-release.cjs",
+    "publish:release": "node scripts/publish-release.cjs",
+    "verify:release": "node scripts/verify-release.cjs",
+    "verify:windows": "node scripts/verify-windows-runtime.cjs"
   },
   "peerDependencies": {
     "electron": "^22.3.27 || 43.x"
@@ -50,7 +54,7 @@
     }
   },
   "engines": {
-    "node": ">=16.17.1"
+    "node": ">=18"
   },
   "dependencies": {
     "tar": "^7.5.22"

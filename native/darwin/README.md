@@ -9,13 +9,16 @@ ship macOS Native binaries or compile Native SDK source on the customer machine.
 
 - Full (`managed`) mode explicitly installs the standalone runtime and lets
   Electron own the Native SDK lifecycle.
-- Mixed (`external`) mode uses the Native host SDK through its bridge. Do not
-  install or load the managed runtime in this mode: it contains a statically
+- Mixed (`external`) mode uses the Native host SDK through its bridge. Skip automatic
+  installation with `GUANCE_NATIVE_SKIP_DOWNLOAD=1` and do not load the managed runtime: it contains a statically
   linked copy of the SDK and must not coexist with another SDK implementation
   in the same process.
 
-There is no npm install/postinstall download and no automatic source-build
-fallback. A missing asset or failed validation reports an error.
+Published npm packages run postinstall by default using the packaged Apple SDK tag. Set
+`GUANCE_NATIVE_RUNTIME_ARCHIVE` to install the same Release archive plus its adjacent
+`.sha256` offline instead. Set `GUANCE_NATIVE_SKIP_DOWNLOAD=1` explicitly for external-only
+apps or npm pipeline validation. There is no source-build fallback; a missing asset or
+failed validation reports an error.
 
 ## Customer command
 
@@ -27,7 +30,8 @@ root, install a published Universal runtime with an explicit Native SDK version:
 npx guance-electron-native --sdk-version <version>
 ```
 
-There is no default Native SDK version. The CLI downloads these two assets from
+The explicit CLI requires a Native SDK version; postinstall instead uses the default tag
+configured in the published npm package. The installer downloads these two assets from
 the matching Native SDK GitHub Release:
 
 ```text
@@ -87,7 +91,8 @@ compilation and debugging belong to the Native SDK build command.
   runtime-manifest.json
 ```
 
-Pass this directory as `native.directory`. The addon statically contains the
+Pass this explicit CLI output as `native.directory`. Postinstall uses the equivalent
+path inside the npm package, which managed mode resolves automatically. The addon statically contains the
 Native SDK and targets Node-API 8. The manifest's minimum macOS version describes
 the addon; the selected Electron version may require a newer macOS version.
 Copy the complete directory outside ASAR when packaging, and sign the addon

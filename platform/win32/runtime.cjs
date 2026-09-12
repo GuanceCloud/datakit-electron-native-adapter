@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { installedDirectory } = require("../../runtime/config.cjs");
 const { PROTOCOL_VERSION } = require("../../core/channels.cjs");
 const PACKAGE_NAME = "@cloudcare/electron-native-adapter";
 const RUNTIME_SUBDIRECTORY = "native/win32-x64";
@@ -79,15 +80,16 @@ function resolveWindowsRuntime({
   const version = metadata.version;
   const staged = resourcesPath && path.join(resourcesPath, "native");
   if (staged && fs.existsSync(staged)) {
-    validateRuntime(staged, { version });
+    validateRuntime(staged);
     return staged;
   }
-  const runtime = path.join(packageRoot, RUNTIME_SUBDIRECTORY);
+  const installed = installedDirectory(packageRoot, "win32-x64");
+  const runtime = fs.existsSync(installed) ? installed : path.join(packageRoot, RUNTIME_SUBDIRECTORY);
   assertOutsideAsar(runtime);
   if (!fs.existsSync(runtime)) {
-    throw new Error(`Missing bundled Windows runtime in ${PACKAGE_NAME}@${version}. Install the prepared npm tarball, or set native.directory to a local native build.`);
+    throw new Error(`Missing downloaded Windows runtime in ${PACKAGE_NAME}@${version}. Run npx guance-electron-native --sdk-version <sdk-tag> --target win32-x64, then set native.directory to the installed runtime.`);
   }
-  validateRuntime(runtime, { version });
+  validateRuntime(runtime);
   return runtime;
 }
 

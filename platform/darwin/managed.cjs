@@ -6,6 +6,7 @@ const { PROTOCOL_VERSION, MAX_BRIDGE_PAYLOAD_BYTES } = require("../../core/chann
 const { normalizeNativeSettings } = require("../../internal/native-settings.cjs");
 const { parseBridgeEvent } = require("../../internal/rum-line-protocol.cjs");
 const { reportError, requiredString } = require("../../internal/options.cjs");
+const { resolveDarwinRuntime } = require("./runtime.cjs");
 
 const REQUIRED_BINDING_METHODS = [
   "invoke",
@@ -41,7 +42,7 @@ function assertNativeBinding(binding) {
 }
 
 function loadNativeBinding(directory) {
-  const nativeDirectory = path.resolve(requiredString(directory, "native.directory"));
+  const nativeDirectory = resolveDarwinRuntime({ directory });
   const addonPath = path.join(nativeDirectory, "guance_electron.node");
   if (!fs.existsSync(addonPath)) {
     throw new Error(`The installed macOS native runtime is missing: ${addonPath}`);

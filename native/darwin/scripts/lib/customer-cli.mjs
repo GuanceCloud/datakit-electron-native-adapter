@@ -1,34 +1,39 @@
 import path from 'node:path'
-import { DEFAULT_DOWNLOAD_BASE_URL, installManagedRuntime, runtimeRelease } from './install-runtime.mjs'
+import { installManagedRuntime, runtimeRelease } from './install-runtime.mjs'
 
 export const CLI_USAGE = [
   'Usage: guance-electron-native --sdk-version <version> [options]',
   '',
-  'Downloads and installs the precompiled Universal macOS runtime for full (managed) mode.',
+  'Installs the precompiled SDK runtime (Universal macOS or Windows x64) for full (managed) mode, remotely or offline.',
   'Mixed (external) mode uses the Native host SDK and must not install this runtime.',
   '',
   'Options:',
-  '  --sdk-version <version>              Native SDK release version (required)',
+  '  --sdk-version <tag>                  Exact SDK tag (Windows also accepts nuget_ / vcpkg_)',
   '  --download-base-url <https-url>       Override the release download base (mirror)',
   '  --runtime-archive <path>              Install a local archive with its .sha256 sidecar',
+  '  --target <darwin-universal|win32-x64>  Override the current platform',
+  '  --asset-name <filename.tar.gz>        Override the version-derived Release filename',
   '  -h, --help                            Show this help',
 ].join('\n')
 
 class CLIUsageError extends Error {}
 
-export function parseCustomerCLIArguments(argv, environment = process.env) {
+export function parseCustomerCLIArguments(argv, environment = process.env, platform = process.platform, arch = process.arch) {
   if (argv.includes('--help') || argv.includes('-h')) return { help: true }
   if (argv[0] === 'external') {
     throw new CLIUsageError('External mode uses the Native host SDK and does not install a managed runtime')
   }
   const options = {
-    downloadBaseURL: environment.GUANCE_NATIVE_RUNTIME_DOWNLOAD_BASE_URL || DEFAULT_DOWNLOAD_BASE_URL,
+    downloadBaseURL: environment.GUANCE_NATIVE_RUNTIME_DOWNLOAD_BASE_URL,
     runtimeArchive: environment.GUANCE_NATIVE_RUNTIME_ARCHIVE,
+    target: platform === 'darwin' && ['arm64', 'x64'].includes(arch) ? 'darwin-universal' : platform === 'win32' && arch === 'x64' ? 'win32-x64' : undefined,
   }
   const names = {
     '--sdk-version': 'sdkVersion',
     '--download-base-url': 'downloadBaseURL',
     '--runtime-archive': 'runtimeArchive',
+    '--target': 'target',
+    '--asset-name': 'assetName',
   }
   const seen = new Set()
   for (let index = 0; index < argv.length; index += 1) {
@@ -41,7 +46,8 @@ export function parseCustomerCLIArguments(argv, environment = process.env) {
     options[names[name]] = value
   }
   if (!options.sdkVersion) throw new CLIUsageError('--sdk-version is required')
-  runtimeRelease(options)
+  if (!options.target) throw new CLIUsageError('Unsupported host; specify a supported --target for cross-platform packaging')
+  runtimeRelease({ ...options, assetName: options.assetName || (options.target === 'win32-x64' && options.runtimeArchive ? 'local-runtime.tar.gz' : undefined) })
   return { installOptions: options, help: false }
 }
 
@@ -61,7 +67,7 @@ export async function runCustomerCLI({
     applicationRoot: path.resolve(cwd),
     options: parsed.installOptions,
   })
-  write('Installed the Universal macOS managed runtime in ' + output)
+  write('Installed the managed runtime in ' + output)
   return { output }
 }
 

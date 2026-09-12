@@ -4,24 +4,26 @@ import { createHash } from 'node:crypto'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { extract } from 'tar'
+import windowsRuntime from '../../../../platform/win32/runtime.cjs'
+import runtimeConfig from '../../../../runtime/config.cjs'
 
 export const DEFAULT_DOWNLOAD_BASE_URL = 'https://github.com/GuanceCloud/datakit-ios/releases/download'
+export const WINDOWS_DOWNLOAD_BASE_URL = 'https://github.com/GuanceCloud/datakit-windows-desktop/releases/download'
 const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 
-export function runtimeRelease({ sdkVersion,
-  downloadBaseURL = DEFAULT_DOWNLOAD_BASE_URL } = {}) {
+export function runtimeRelease({ sdkVersion, target = 'darwin-universal', assetName,
+  downloadBaseURL = target === 'win32-x64' ? WINDOWS_DOWNLOAD_BASE_URL : DEFAULT_DOWNLOAD_BASE_URL } = {}) {
+  if (!['darwin-universal', 'win32-x64'].includes(target)) throw new Error('Unsupported runtime target: ' + target)
   if (!sdkVersion) throw new Error('Native SDK version is required')
-  if (!/^v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/u.test(sdkVersion)) {
-    throw new Error('Invalid Native SDK version: ' + sdkVersion)
-  }
+  const version = runtimeConfig.sdkVersionForTag(sdkVersion, target)
   const base = new URL(downloadBaseURL)
   if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) {
     throw new Error('Runtime download base must be an HTTPS URL without credentials, query, or fragment')
   }
-  const version = sdkVersion.replace(/^v/u, '')
-  const filename = 'guance-electron-runtime-' + version + '-darwin-universal.tar.gz'
+  const filename = assetName || runtimeConfig.defaultAssetName(sdkVersion, target)
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.tar\.gz$/u.test(filename)) throw new Error('Asset name must be a .tar.gz filename without a directory')
   return {
-    version, filename,
+    version, filename, target,
     url: base.href.replace(/\/$/u, '') + '/' + encodeURIComponent(sdkVersion) + '/' + filename,
   }
 }
@@ -54,6 +56,14 @@ function runtimeFiles(directory, relative = '') {
 }
 
 export function validateRuntime(directory, release) {
+  if (release.target === 'win32-x64') {
+    const entries = fs.readdirSync(directory)
+    if (entries.some((name) => !['guance_windows_electron_bridge.exe', 'guance_windows_native.dll', 'runtime-manifest.json', 'LICENSE'].includes(name))) throw new Error('Unexpected Windows runtime file')
+    runtimeFiles(directory)
+    const manifest = windowsRuntime.validateRuntime(directory)
+    if (manifest.sdkVersion !== release.version) throw new Error('Windows runtime SDK version does not match the requested version')
+    return manifest
+  }
   const files = runtimeFiles(directory)
   const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'runtime-manifest.json'), 'utf8'))
   const architectures = ['arm64', 'x86_64']
@@ -96,7 +106,7 @@ async function download(url, destination, limit, fetchImpl) {
   }), fs.createWriteStream(destination, { flags: 'wx' }))
 }
 
-async function unpack(archive, destination) {
+async function unpack(archive, destination, target) {
   let invalidEntry
   let bytes = 0
   await extract({
@@ -104,9 +114,9 @@ async function unpack(archive, destination) {
     filter(name, entry) {
       const parts = name.replace(/\/$/u, '').split('/')
       bytes += entry.size || 0
-      if (!['File', 'Directory'].includes(entry.type) || parts[0] !== 'runtime' ||
+      if (!['File', 'Directory'].includes(entry.type) || (target !== 'win32-x64' && parts[0] !== 'runtime') ||
           parts.some((part) => !part || part === '.' || part === '..') ||
-          name.includes('\\') || name.includes('\0') || bytes > MAX_ARCHIVE_BYTES) {
+          name.includes('\\') || name.includes(':') || name.includes('\0') || bytes > MAX_ARCHIVE_BYTES) {
         invalidEntry = name
         return false
       }
@@ -117,8 +127,9 @@ async function unpack(archive, destination) {
 }
 
 export async function installManagedRuntime({ applicationRoot, options = {}, fetchImpl = globalThis.fetch }) {
-  const release = runtimeRelease(options)
-  const buildRoot = path.resolve(applicationRoot, '.cloudcare', 'native', 'darwin')
+  // A local SDK archive has no network naming dependency; its manifest is authoritative.
+  const release = runtimeRelease({ ...options, assetName: options.assetName || (options.target === 'win32-x64' && options.runtimeArchive ? 'local-runtime.tar.gz' : undefined) })
+  const buildRoot = path.resolve(applicationRoot, '.cloudcare', 'native', release.target === 'win32-x64' ? 'win32-x64' : 'darwin')
   const output = path.join(buildRoot, 'runtime')
   fs.mkdirSync(buildRoot, { recursive: true })
   const lock = path.join(buildRoot, '.install-lock')
@@ -136,7 +147,8 @@ export async function installManagedRuntime({ applicationRoot, options = {}, fet
     } else {
       const cache = path.join(buildRoot, '.cache')
       fs.mkdirSync(cache, { recursive: true })
-      archive = path.join(cache, release.filename)
+      const identity = createHash('sha256').update(release.url).digest('hex').slice(0, 16)
+      archive = path.join(cache, identity + '-' + release.filename)
       let cached = false
       try { verifyArchive(archive); cached = true } catch {}
       if (!cached) {
@@ -150,8 +162,10 @@ export async function installManagedRuntime({ applicationRoot, options = {}, fet
     }
     const unpacked = path.join(stage, 'unpacked')
     fs.mkdirSync(unpacked)
-    await unpack(archive, unpacked)
-    const runtime = path.join(unpacked, 'runtime')
+    await unpack(archive, unpacked, release.target)
+    const nested = path.join(unpacked, 'runtime')
+    const runtime = release.target === 'win32-x64' && !fs.existsSync(nested) ? unpacked : nested
+    if (runtime === nested && fs.readdirSync(unpacked).some((name) => name !== 'runtime')) throw new Error('Unexpected files outside runtime directory')
     validateRuntime(runtime, release)
     if (cacheDestination) {
       fs.copyFileSync(archive, cacheDestination)

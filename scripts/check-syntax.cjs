@@ -40,6 +40,7 @@ for (const directory of [
   "packaging",
   "preload",
   "scripts",
+  "runtime",
 ]) {
   const directoryPath = path.join(root, directory);
   if (!fs.existsSync(directoryPath)) continue;
