@@ -1,0 +1,61 @@
+name: Publish Electron adapter to npm
+
+on:
+  push:
+    tags:
+      - 'agent_*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: electron-npm-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'GuanceCloud/datakit-electron-native-adapter' && startsWith(github.ref, 'refs/tags/agent_')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ELECTRON_PIPELINE_ONLY: ${{ vars.ELECTRON_PIPELINE_ONLY }}
+      MACOS_SDK_TAG: ${{ vars.MACOS_SDK_TAG }}
+      WINDOWS_SDK_TAG: ${{ vars.WINDOWS_SDK_TAG }}
+      WINDOWS_ASSET_NAME: ${{ vars.WINDOWS_ASSET_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org/
+          cache: npm
+      - name: Install npm with Trusted Publishing support
+        run: npm install --global npm@11.11.0
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Cache dependencies for offline installation tests
+        run: |
+          TAR_SPEC=$(node -p "require('./package.json').dependencies.tar")
+          npm install --prefix "$RUNNER_TEMP/electron-offline-tests" --ignore-scripts --no-audit --no-fund "tar@$TAR_SPEC"
+      - name: Test adapter
+        run: npm run check
+      - name: Pack and verify the release tarball
+        run: npm run publish:github -- prepare
+      - name: Archive the exact release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-npm-${{ github.ref_name }}-${{ github.run_attempt }}
+          path: artifacts/release/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish and verify npm integrity
+        run: npm run publish:github -- publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
