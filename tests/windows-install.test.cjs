@@ -13,17 +13,41 @@ const installer = () => import(pathToFileURL(path.join(__dirname, "../native/dar
 const hash = (data) => createHash("sha256").update(data).digest("hex");
 const sdkVersion = "3.2.1-alpha.1";
 
+for (const arch of ["x64", "x86", "arm64"]) {
+  test("installs, selects and rejects incorrect archives for " + arch, async (t) => {
+    const f = await fixture(t, true, arch);
+    const { installManagedRuntime, runtimeRelease } = await installer();
+    const target = "win32-" + arch;
+    const release = runtimeRelease({ sdkVersion: "vcpkg_" + sdkVersion, target });
+    assert.equal(release.filename, `guance-electron-runtime-${sdkVersion}-${target}.tar.gz`);
+    const options = { sdkVersion: "vcpkg_" + sdkVersion, target };
+    const urls = [];
+    await installManagedRuntime({ applicationRoot: f.applicationRoot, options, fetchImpl: async (url) => {
+      urls.push(url);
+      return new Response(fs.readFileSync(url.endsWith(".sha256") ? f.archive + ".sha256" : f.archive));
+    } });
+    assert.deepEqual(urls, [release.url + ".sha256", release.url]);
+    const before = fs.readFileSync(path.join(f.output, "runtime-manifest.json"));
+    const wrong = await fixture(t, true, arch === "x64" ? "x86" : "x64");
+    await assert.rejects(installManagedRuntime({ applicationRoot: f.applicationRoot,
+      options: { ...options, runtimeArchive: wrong.archive }, fetchImpl() { throw Error("No network fallback"); } }), /architecture mismatch/);
+    assert.deepEqual(fs.readFileSync(path.join(f.output, "runtime-manifest.json")), before);
+    const { parseCustomerCLIArguments } = await import("../native/darwin/scripts/lib/customer-cli.mjs");
+    assert.equal(parseCustomerCLIArguments(["--sdk-version", options.sdkVersion], {}, "win32", arch === "x86" ? "ia32" : arch).installOptions.target, target);
+  });
+}
+
 // Synthetic headers test the installer contract; they are not runnable native binaries.
-async function fixture(t, nested = true) {
+async function fixture(t, nested = true, arch = "x64") {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "windows-sdk-install-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const runtime = path.join(root, "source/runtime");
   fs.mkdirSync(runtime, { recursive: true });
-  const manifest = { schemaVersion: 1, platform: "win32", arch: "x64", configuration: "Release", protocolVersion: 1,
+  const manifest = { schemaVersion: 1, platform: "win32", arch, configuration: "Release", protocolVersion: 1,
     sdkVersion, source: { commit: "a".repeat(40), dirty: false }, crt: { policy: "prerequisite" }, files: {} };
   for (const name of ["guance_windows_electron_bridge.exe", "guance_windows_native.dll"]) {
     const bytes = Buffer.alloc(128);
-    bytes.write("MZ"); bytes.writeUInt32LE(64, 60); bytes.writeUInt32LE(0x4550, 64); bytes.writeUInt16LE(0x8664, 68);
+    bytes.write("MZ"); bytes.writeUInt32LE(64, 60); bytes.writeUInt32LE(0x4550, 64); bytes.writeUInt16LE({ x64: 0x8664, x86: 0x14c, arm64: 0xaa64 }[arch], 68);
     fs.writeFileSync(path.join(runtime, name), bytes);
     manifest.files[name] = { size: bytes.length, sha256: hash(bytes) };
   }
@@ -33,7 +57,7 @@ async function fixture(t, nested = true) {
   await tar.create({ gzip: true, portable: true, cwd: nested ? path.dirname(runtime) : runtime, file: archive }, nested ? ["runtime"] : fs.readdirSync(runtime));
   fs.writeFileSync(archive + ".sha256", hash(fs.readFileSync(archive)) + "  sdk-runtime.tar.gz\n");
   const applicationRoot = path.join(root, "application");
-  return { root, archive, applicationRoot, output: path.join(applicationRoot, ".cloudcare/native/win32-x64/runtime") };
+  return { root, archive, applicationRoot, output: path.join(applicationRoot, ".cloudcare/native/win32-" + arch + "/runtime") };
 }
 
 test("Windows online and offline installers consume the same SDK archive", async (t) => {

@@ -26,7 +26,7 @@ async function main() {
       ? bootstrap({ electron: { ipcMain }, native: { mode: "managed", settings, onNativeOutput }, onError, enableAppLaunch: false })
       : startFullMode({ ipcMain, nativeSettings: settings, onNativeOutput, onError, enableAppLaunch: false,
         nativeDirectory: api === "explicitOverride" ? (process.env.GUANCE_TEST_NATIVE_DIRECTORY ||
-          path.resolve(path.dirname(require.resolve("@cloudcare/electron-native-adapter")), "../.cloudcare/native/win32-x64/runtime")) : undefined,
+          path.resolve(path.dirname(require.resolve("@cloudcare/electron-native-adapter")), "../.cloudcare/native/win32-" + (process.arch === "ia32" ? "x86" : process.arch) + "/runtime")) : undefined,
       }));
     try {
       assert.equal(bridge.capabilities.protocolVersion, 1);

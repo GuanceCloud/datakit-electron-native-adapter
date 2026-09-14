@@ -8,17 +8,17 @@ const crypto = require("node:crypto");
 const { PACKAGE_NAME, RUNTIME_SUBDIRECTORY, RUNTIME_FILES, resolveWindowsRuntime, validateRuntime } = require("../platform/win32/runtime.cjs");
 const { stageWindowsRuntime } = require("../packaging/windows.cjs");
 
-function fixture(t) {
+function fixture(t, arch = "x64") {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "win-runtime-test-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const runtime = path.join(root, RUNTIME_SUBDIRECTORY);
+  const runtime = path.join(root, "native", "win32-" + arch);
   fs.mkdirSync(runtime, { recursive: true });
-  const manifest = { schemaVersion: 1, platform: "win32", arch: "x64", configuration: "Release", protocolVersion: 1,
+  const manifest = { schemaVersion: 1, platform: "win32", arch, configuration: "Release", protocolVersion: 1,
     sdkVersion: "0.1.0", npmPackageVersion: "0.0.0-local", source: { commit: "a".repeat(40), dirty: false },
     crt: { policy: "prerequisite" }, files: {} };
   for (const name of RUNTIME_FILES) {
     const bytes = Buffer.alloc(128);
-    bytes.write("MZ"); bytes.writeUInt32LE(64, 60); bytes.writeUInt32LE(0x4550, 64); bytes.writeUInt16LE(0x8664, 68);
+    bytes.write("MZ"); bytes.writeUInt32LE(64, 60); bytes.writeUInt32LE(0x4550, 64); bytes.writeUInt16LE({ x64: 0x8664, x86: 0x14c, arm64: 0xaa64 }[arch], 68);
     fs.writeFileSync(path.join(runtime, name), bytes);
     manifest.files[name] = { size: bytes.length, sha256: crypto.createHash("sha256").update(bytes).digest("hex") };
   }
@@ -26,6 +26,23 @@ function fixture(t) {
   save();
   fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: PACKAGE_NAME, version: "0.0.0-local" }));
   return { root, runtime, manifest, save, packageRoot: root };
+}
+
+for (const arch of ["x64", "x86", "arm64"]) {
+  test("resolves and stages only the matching " + arch + " runtime", (t) => {
+    const f = fixture(t, arch);
+    const nodeArch = arch === "x86" ? "ia32" : arch;
+    const installed = path.join(f.root, ".cloudcare", "native", "win32-" + arch, "runtime");
+    fs.mkdirSync(path.dirname(installed), { recursive: true });
+    fs.renameSync(f.runtime, installed);
+    assert.equal(resolveWindowsRuntime({ packageRoot: f.root, resourcesPath: null, arch: nodeArch }), installed);
+    const staged = stageWindowsRuntime({ nativeDirectory: installed, resourcesDirectory: path.join(f.root, "resources"), arch: nodeArch });
+    assert.equal(validateRuntime(staged, { arch: nodeArch }).arch, arch);
+    const wrongArch = arch === "x64" ? "arm64" : "x64";
+    assert.throws(() => resolveWindowsRuntime({ directory: installed, arch: wrongArch }), /architecture mismatch/);
+    assert.throws(() => resolveWindowsRuntime({ resourcesPath: path.dirname(staged), arch: wrongArch }), /architecture mismatch/);
+    assert.throws(() => resolveWindowsRuntime({ packageRoot: f.root, resourcesPath: null, arch: wrongArch }), /Missing downloaded Windows runtime/);
+  });
 }
 
 test("default package resolution validates native bytes and stages complete runtime outside ASAR", (t) => {
@@ -41,7 +58,7 @@ test("bad explicit override never falls back and missing bundle/unsupported arch
   const f = fixture(t);
   assert.equal(resolveWindowsRuntime({ directory: path.join(f.root, "missing"), packageRoot: f.root }), path.join(f.root, "missing"));
   assert.throws(() => resolveWindowsRuntime({ directory: "" }), /non-empty/);
-  assert.throws(() => resolveWindowsRuntime({ arch: "arm64" }), /does not support arm64/);
+  assert.throws(() => resolveWindowsRuntime({ arch: "arm" }), /does not support arm/);
   fs.renameSync(f.runtime, path.join(f.root, "exported-runtime"));
   assert.throws(() => resolveWindowsRuntime({ packageRoot: f.root, resourcesPath: null, arch: "x64" }), /Missing downloaded Windows runtime/);
   assert.throws(() => resolveWindowsRuntime({ directory: path.join(f.root, "app.asar/runtime") }), /cannot run inside ASAR/);

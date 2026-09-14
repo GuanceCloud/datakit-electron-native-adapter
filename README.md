@@ -12,7 +12,7 @@ This CommonJS adapter is one npm package. npm installation downloads the current
 - macOS external mode: supported. The Native host owns the macOS Native SDK and its Electron bridge.
 - Linux: not supported.
 
-Windows compatibility baselines are Electron `22.3.27` (Windows 7 SP1 through Windows 11) and `43.x` (Windows 10+). The npm peer range is `^22.3.27 || 43.x`; intermediate Electron majors are not yet validated. Electron 22 is the legacy compatibility baseline and is end-of-life; see the [upstream support notice](https://www.electronjs.org/blog/electron-22-0). Native runtime compatibility must also be validated on each target OS. The macOS managed backend uses the same declared Electron range and a Universal SDK runtime; each Electron/architecture combination still requires native release acceptance.
+Windows compatibility baselines are Electron `22.3.27` (Windows 7 SP1 through Windows 11) and `43.x` (Windows 10+). The npm peer range is `^22.3.27 || 43.x`; intermediate Electron majors are not yet validated. Electron 22 is the legacy compatibility baseline and is end-of-life; see the [upstream support notice](https://www.electronjs.org/blog/electron-22-0). Native runtime compatibility must also be validated on each target OS and architecture; the legacy Windows 7 baseline is not an ARM64 support claim. The macOS managed backend uses the same declared Electron range and a Universal SDK runtime; each Electron/architecture combination still requires native release acceptance.
 
 The adapter JavaScript runtime baseline is Node.js `16.17.1`, as embedded in Electron 22. Installing the npm package and running its SDK installer require a separate Node.js `18+` toolchain (the archive dependency requires it); these installer dependencies are not loaded by the adapter API. Development and `npm run check` require Node.js `22.12` or newer; users of a packaged application do not need a separate Node.js installation.
 
@@ -55,7 +55,7 @@ Installing a published npm package runs postinstall and downloads the current pl
 | Target | GitHub Release source | Runtime |
 | --- | --- | --- |
 | macOS | [datakit-ios](https://github.com/GuanceCloud/datakit-ios/releases) | Universal arm64 + x86_64 |
-| Windows | [datakit-windows-desktop](https://github.com/GuanceCloud/datakit-windows-desktop/releases) | x64 Bridge EXE and Native DLL |
+| Windows | [datakit-windows-desktop](https://github.com/GuanceCloud/datakit-windows-desktop/releases) | x64 / x86 / arm64 Bridge EXE and Native DLL |
 
 The npm, Apple SDK and Windows SDK versions are independent. Release packages carry fixed per-platform SDK tags in `package.json.nativeRuntime`; no `latest` lookup is used. Private source checkouts and unsupported hosts skip automatic installation. A download or validation failure on a supported host fails npm installation.
 
@@ -87,9 +87,9 @@ npx guance-electron-native --sdk-version <apple-sdk-tag>
 npx guance-electron-native --sdk-version <windows-sdk-tag>
 ```
 
-The CLI selects the current platform. For cross-platform packaging, add `--target darwin-universal` or `--target win32-x64`. Windows defaults to `guance-electron-runtime-<version>-win32-x64.tar.gz`; use `--asset-name` to override a fixed or legacy filename. For Windows tags `nuget_<version>` and `vcpkg_<version>`, the download URL retains the full tag and the filename/manifest use its version suffix. The stream suffix follows the SDK's stable, `alpha.N`, or `beta.N` format. Plain and `v`-prefixed versions remain supported. A tag must actually contain the runtime assets; a NuGet/vcpkg tag alone does not imply they were uploaded.
+The CLI and postinstall select the current Node platform and architecture. Node/Electron `ia32` maps to SDK `x86`. To install for an Electron architecture different from the installing Node process, set `GUANCE_NATIVE_RUNTIME_TARGET=win32-x86` (or `win32-x64` / `win32-arm64`) during npm installation, or pass the CLI target explicitly. `stageWindowsRuntime({ arch })` accepts `x64`, `x86` (also `ia32`), and `arm64`; pass the target explicitly for cross-architecture packaging. For cross-platform packaging, add `--target darwin-universal` or `--target win32-x64`, `--target win32-x86`, or `--target win32-arm64`. Windows defaults to `guance-electron-runtime-<version>-win32-<arch>.tar.gz`; use `--asset-name` to override a fixed or legacy filename. For Windows tags `nuget_<version>` and `vcpkg_<version>`, the download URL retains the full tag and the filename/manifest use its version suffix. The stream suffix follows the SDK's stable, `alpha.N`, or `beta.N` format. Plain and `v`-prefixed versions remain supported. A tag must actually contain the runtime assets; a NuGet/vcpkg tag alone does not imply they were uploaded.
 
-macOS requests `guance-electron-runtime-<version>-darwin-universal.tar.gz`. Both targets request an adjacent `<archive-name>.sha256` asset. The archive's SDK version, architecture, manifest and file hashes are validated before installation. HTTPS mirrors are supported through `--download-base-url <base>` or `GUANCE_NATIVE_RUNTIME_DOWNLOAD_BASE_URL`; the installer appends `/<sdk-tag>/<filename>`.
+macOS requests `guance-electron-runtime-<version>-darwin-universal.tar.gz`. All targets request an adjacent `<archive-name>.sha256` asset. The archive's SDK version, architecture, manifest and file hashes are validated before installation. HTTPS mirrors are supported through `--download-base-url <base>` or `GUANCE_NATIVE_RUNTIME_DOWNLOAD_BASE_URL`; the installer appends `/<sdk-tag>/<filename>`.
 
 ### Offline installation
 
@@ -101,11 +101,11 @@ npx guance-electron-native --sdk-version <sdk-tag> --runtime-archive /path/to/ru
 
 The checksum must be `/path/to/runtime.tar.gz.sha256`. Offline installation does not access the network and does not require `--asset-name`. The archive path can also be supplied with `GUANCE_NATIVE_RUNTIME_ARCHIVE`. Install the npm package and its dependencies beforehand; otherwise `npx` itself may contact npm. This command installs a native runtime, not the npm package.
 
-Supported archives are currently `.tar.gz`, not ZIP or GitHub-generated source archives. macOS preserves the SDK's top-level `runtime/` directory and manifest format. Windows accepts either top-level `runtime/` or a flat export with EXE, DLL, `runtime-manifest.json`, and optional LICENSE; it validates the existing SDK export schema (Release/x64, protocol, source provenance, CRT metadata and binary hashes). The SDK's `build/pack-electron-runtime.ps1` produces the version-derived archive and adjacent checksum from its existing exporter. Release upload remains an SDK publication step; local acceptance does not establish that a public asset is available.
+Supported archives are currently `.tar.gz`, not ZIP or GitHub-generated source archives. macOS preserves the SDK's top-level `runtime/` directory and manifest format. Windows accepts either top-level `runtime/` or a flat export with EXE, DLL, `runtime-manifest.json`, and optional LICENSE; it validates the existing SDK export schema (Release with matching x64/x86/arm64 PE architecture, protocol, source provenance, CRT metadata and binary hashes). The SDK's `build/pack-electron-runtime.ps1` produces the version-derived archive and adjacent checksum from its existing exporter. Release upload remains an SDK publication step; local acceptance does not establish that a public asset is available.
 
-Postinstall stores `.cloudcare/native/darwin/runtime` or `.cloudcare/native/win32-x64/runtime` inside the installed npm package, and managed mode resolves it automatically. Explicit CLI installs use those paths under the invoking application; pass the printed output as `native.directory`. Staged `resources/native` takes precedence over package-local runtime files. Verified archives are cached under each platform's `.cache`, keyed by release URL, and rechecked on reuse. Failed downloads or validation leave the previous installation intact. The installer does not compile Native SDK source.
+Postinstall stores `.cloudcare/native/darwin/runtime` or `.cloudcare/native/win32-<arch>/runtime` inside the installed npm package, and managed mode resolves it automatically. Explicit CLI installs use those paths under the invoking application; pass the printed output as `native.directory`. Staged `resources/native` takes precedence over package-local runtime files. Verified archives are cached under each platform's `.cache`, keyed by release URL, and rechecked on reuse. Failed downloads or validation leave the previous installation intact. The installer does not compile Native SDK source.
 
-Windows applications require the Microsoft Visual C++ v14 x64 Redistributable and Windows Universal CRT; this package does not redistribute them.
+Windows applications require the Microsoft Visual C++ v14 Redistributable for the runtime architecture and Windows Universal CRT; this package does not redistribute them.
 
 ### Application packaging
 
@@ -139,7 +139,7 @@ npm run verify:release -- --directory artifacts/release
 npm run publish:release -- --directory artifacts/release --registry https://registry.npmjs.org/ --tag alpha --access public
 ```
 
-Packing requires fixed SDK tags, but no native archives, descriptors or network checks. The Windows filename is derived and saved in the package unless configured in `nativeRuntime.targets["win32-x64"].assetName` or overridden by `--windows-asset-name`. A filename-only override retains the configured SDK tag; updating the SDK tag regenerates a previously derived filename and retains a custom fixed filename. Archive `main/`, the npm tarball, `pack-report.json` (schema 5) and the verification report. Source provenance must be clean for publication; `--allow-dirty` is only for local pack/verify experiments.
+Packing requires fixed SDK tags, but no native archives, descriptors or network checks. `--windows-sdk-version` records the same SDK tag and a distinct derived filename for all three Windows targets. Each target can configure `nativeRuntime.targets["win32-<arch>"].assetName`; the legacy `--windows-asset-name` option overrides x64 only. A filename-only override retains the configured SDK tag; updating the SDK tag regenerates a previously derived filename and retains a custom fixed filename. Archive `main/`, the npm tarball, `pack-report.json` (schema 5) and the verification report. Source provenance must be clean for publication; `--allow-dirty` is only for local pack/verify experiments.
 
 `verify:release` installs the actual npm tarball (including default postinstall), then checks CLI help and adapter import. Add `--skip-runtime` explicitly to test only the npm pipeline. It may download normal npm dependencies; `--offline` controls npm's cache, not the SDK downloader. To prevent SDK network access, supply `GUANCE_NATIVE_RUNTIME_ARCHIVE` or use `--skip-runtime`. This verifier does not execute native binaries or establish Native SDK runtime compatibility.
 
@@ -149,7 +149,7 @@ For an alpha intended only to validate the npm pipeline, use `pack:release --pip
 
 ### Windows native acceptance
 
-On a Windows x64 machine with the CRT prerequisites, verify an actual npm candidate against a trusted SDK archive:
+On a Windows machine with matching Node, Electron and runtime architectures and the CRT prerequisites, verify an actual npm candidate against a trusted SDK archive:
 
 ```powershell
 npm run verify:windows -- --directory artifacts/release --runtime-archive C:/sdk/runtime.tar.gz --offline --electron C:/tools/electron/electron.exe

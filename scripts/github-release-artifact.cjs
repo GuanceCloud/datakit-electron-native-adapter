@@ -15,7 +15,7 @@ function validatePackageMetadata(metadata, version) {
   if (!validVersion(version) || metadata.name !== PACKAGE_NAME || metadata.version !== version || metadata.private || metadata.os || metadata.cpu ||
       metadata.scripts?.postinstall !== "node runtime/postinstall.cjs" || Object.keys(metadata.scripts).length !== 1 ||
       metadata.bin?.["guance-electron-native"] !== "bin/guance-electron-native.mjs" ||
-      !Array.isArray(metadata.files) || metadata.files.some((name) => name === "runtime-release.json" || /^native\/(win32-x64|darwin-universal)/.test(name))) {
+      !Array.isArray(metadata.files) || metadata.files.some((name) => name === "runtime-release.json" || /^native\/(win32-(?:x64|x86|arm64)|darwin-universal)/.test(name))) {
     throw new Error("Invalid SDK installer package metadata or lifecycle scripts.");
   }
   validateDefaults(metadata.nativeRuntime, version);

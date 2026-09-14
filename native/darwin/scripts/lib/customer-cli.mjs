@@ -1,17 +1,18 @@
 import path from 'node:path'
+import runtimeConfig from '../../../../runtime/config.cjs'
 import { installManagedRuntime, runtimeRelease } from './install-runtime.mjs'
 
 export const CLI_USAGE = [
   'Usage: guance-electron-native --sdk-version <version> [options]',
   '',
-  'Installs the precompiled SDK runtime (Universal macOS or Windows x64) for full (managed) mode, remotely or offline.',
+  'Installs the precompiled SDK runtime (Universal macOS or Windows x64/x86/arm64) for full (managed) mode, remotely or offline.',
   'Mixed (external) mode uses the Native host SDK and must not install this runtime.',
   '',
   'Options:',
   '  --sdk-version <tag>                  Exact SDK tag (Windows also accepts nuget_ / vcpkg_)',
   '  --download-base-url <https-url>       Override the release download base (mirror)',
   '  --runtime-archive <path>              Install a local archive with its .sha256 sidecar',
-  '  --target <darwin-universal|win32-x64>  Override the current platform',
+  '  --target <darwin-universal|win32-x64|win32-x86|win32-arm64>  Override the current platform',
   '  --asset-name <filename.tar.gz>        Override the version-derived Release filename',
   '  -h, --help                            Show this help',
 ].join('\n')
@@ -26,7 +27,7 @@ export function parseCustomerCLIArguments(argv, environment = process.env, platf
   const options = {
     downloadBaseURL: environment.GUANCE_NATIVE_RUNTIME_DOWNLOAD_BASE_URL,
     runtimeArchive: environment.GUANCE_NATIVE_RUNTIME_ARCHIVE,
-    target: platform === 'darwin' && ['arm64', 'x64'].includes(arch) ? 'darwin-universal' : platform === 'win32' && arch === 'x64' ? 'win32-x64' : undefined,
+    target: runtimeConfig.targetFor(platform, arch),
   }
   const names = {
     '--sdk-version': 'sdkVersion',
@@ -47,7 +48,7 @@ export function parseCustomerCLIArguments(argv, environment = process.env, platf
   }
   if (!options.sdkVersion) throw new CLIUsageError('--sdk-version is required')
   if (!options.target) throw new CLIUsageError('Unsupported host; specify a supported --target for cross-platform packaging')
-  runtimeRelease({ ...options, assetName: options.assetName || (options.target === 'win32-x64' && options.runtimeArchive ? 'local-runtime.tar.gz' : undefined) })
+  runtimeRelease({ ...options, assetName: options.assetName || (runtimeConfig.isWindowsTarget(options.target) && options.runtimeArchive ? 'local-runtime.tar.gz' : undefined) })
   return { installOptions: options, help: false }
 }
 

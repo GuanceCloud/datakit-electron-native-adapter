@@ -5,7 +5,7 @@ const { spawn } = require("node:child_process");
 const { npm } = require("./npm-command.cjs");
 const { readReleaseArtifact, PACKAGE_NAME } = require("./github-release-artifact.cjs");
 const { argumentsFor, writeJSON } = require("./release-common.cjs");
-const { installedDirectory } = require("../runtime/config.cjs");
+const { installedDirectory, targetFor } = require("../runtime/config.cjs");
 
 function run(executable, args, cwd, env) {
   return new Promise((resolve, reject) => {
@@ -22,12 +22,13 @@ function run(executable, args, cwd, env) {
 }
 
 async function verifyWindowsRuntime({ directory, runtimeArchive, sdkVersion, electron, allowDirty = false, offline = false }) {
-  if (process.platform !== "win32" || process.arch !== "x64") throw new Error("Run native acceptance on Windows x64.");
+  const target = targetFor(process.platform, process.arch);
+  if (process.platform !== "win32" || !target) throw new Error("Run native acceptance on Windows x64, x86 (ia32), or arm64 with matching Node and Electron architectures.");
   if (!directory || !runtimeArchive) throw new Error("--directory and --runtime-archive are required; supply a trusted SDK build.");
   const root = path.resolve(directory);
   const { report, tarball } = readReleaseArtifact(root, { allowDirty });
   const consumer = fs.mkdtempSync(path.join(root, "verify-windows-"));
-  const environment = { ...process.env, GUANCE_NATIVE_SKIP_DOWNLOAD: "0", GUANCE_NATIVE_RUNTIME_TARGET: "win32-x64",
+  const environment = { ...process.env, GUANCE_NATIVE_SKIP_DOWNLOAD: "0", GUANCE_NATIVE_RUNTIME_TARGET: target,
     GUANCE_NATIVE_RUNTIME_ARCHIVE: path.resolve(runtimeArchive) };
   // An explicit override is optional: default acceptance exercises the packed SDK tag.
   delete environment.GUANCE_NATIVE_SDK_VERSION;
@@ -38,7 +39,7 @@ async function verifyWindowsRuntime({ directory, runtimeArchive, sdkVersion, ele
     await npm(["install", tarball, "--ignore-scripts=false", "--no-audit", "--no-fund", "--omit=optional", ...(offline ? ["--offline"] : [])],
       consumer, { environment });
     const packageRoot = path.join(consumer, "node_modules", PACKAGE_NAME);
-    const runtime = installedDirectory(packageRoot, "win32-x64");
+    const runtime = installedDirectory(packageRoot, target);
     const manifest = JSON.parse(fs.readFileSync(path.join(runtime, "runtime-manifest.json")));
     const staging = require(path.join(packageRoot, "packaging/windows.cjs"));
     const staged = staging.stageWindowsRuntime({ nativeDirectory: runtime, resourcesDirectory: path.join(consumer, "resources") });
@@ -50,7 +51,7 @@ async function verifyWindowsRuntime({ directory, runtimeArchive, sdkVersion, ele
     const electronLog = electron ? await run(path.resolve(electron), [path.join(consumer, "windows-electron-smoke.cjs")], consumer,
       { ...environment, GUANCE_TEST_NATIVE_DIRECTORY: staged }) : undefined;
     const summary = { passed: true, version: report.version, packageIntegrity: report.package.integrity,
-      sdkVersion: manifest.sdkVersion, sdkSource: manifest.source, nativeRuntimeValidated: true,
+      arch: manifest.arch, sdkVersion: manifest.sdkVersion, sdkSource: manifest.source, nativeRuntimeValidated: true,
       electronValidated: Boolean(electron), nativeLog, electronLog };
     writeJSON(path.join(root, "verify-windows-" + Date.now() + ".json"), summary);
     console.log(JSON.stringify(summary, null, 2));

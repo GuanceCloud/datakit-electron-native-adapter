@@ -121,6 +121,11 @@ test("npm pack records the derived Windows filename and supports partial configu
   assert.deepEqual(metadata.nativeRuntime.targets["win32-x64"], {
     sdkVersion: "vcpkg_0.1.0-alpha.7", assetName: "guance-electron-runtime-0.1.0-alpha.7-win32-x64.tar.gz",
   });
+  for (const arch of ["x86", "arm64"]) {
+    assert.deepEqual(metadata.nativeRuntime.targets["win32-" + arch], {
+      sdkVersion: "vcpkg_0.1.0-alpha.7", assetName: `guance-electron-runtime-0.1.0-alpha.7-win32-${arch}.tar.gz`,
+    });
+  }
   // Use the actual packed source as a configured project, with source provenance.
   const { execFileSync } = require("node:child_process");
   const source = path.join(output, "main");
@@ -138,4 +143,10 @@ test("npm pack records the derived Windows filename and supports partial configu
     windowsSdkVersion: "nuget_0.1.0-alpha.8" });
   assert.equal(readReleaseArtifact(nextOutput).metadata.nativeRuntime.targets["win32-x64"].assetName,
     "guance-electron-runtime-0.1.0-alpha.8-win32-x64.tar.gz");
+  for (const arch of ["x86", "arm64"]) {
+    assert.equal(readReleaseArtifact(fixedOutput).metadata.nativeRuntime.targets["win32-" + arch].assetName,
+      `guance-electron-runtime-0.1.0-alpha.7-win32-${arch}.tar.gz`);
+    assert.equal(readReleaseArtifact(nextOutput).metadata.nativeRuntime.targets["win32-" + arch].assetName,
+      `guance-electron-runtime-0.1.0-alpha.8-win32-${arch}.tar.gz`);
+  }
 });

@@ -13,14 +13,14 @@ function fixture(t, overrides = {}) {
   t.after(() => fs.rmSync(packageRoot, { recursive: true, force: true }));
   const metadata = { version: "0.1.0-alpha.1", nativeRuntime: { schemaVersion: 1, pipelineOnly: false, targets: {
     "darwin-universal": { sdkVersion: "1.6.8-test.1" },
-    "win32-x64": { sdkVersion: "3.2.1-test.1", assetName: "sdk.tar.gz" },
+    ...Object.fromEntries(["x64", "x86", "arm64"].map((arch) => ["win32-" + arch, { sdkVersion: "3.2.1-test.1", assetName: "sdk.tar.gz" }])),
   } }, ...overrides };
   fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify(metadata));
   return { packageRoot, metadata };
 }
 test("postinstall installs the configured SDK by default on each supported platform", async (t) => {
   const f = fixture(t);
-  for (const [platform, arch, target] of [["darwin", "arm64", "darwin-universal"], ["win32", "x64", "win32-x64"]]) {
+  for (const [platform, arch, target] of [["darwin", "arm64", "darwin-universal"], ["win32", "x64", "win32-x64"], ["win32", "ia32", "win32-x86"], ["win32", "arm64", "win32-arm64"]]) {
     let request;
     const result = await postinstall({ ...f, platform, arch, environment: {}, log() {}, install: async (value) => {
       request = value;
