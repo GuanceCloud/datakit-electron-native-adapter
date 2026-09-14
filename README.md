@@ -1,6 +1,6 @@
-# `@cloudcare/electron-native-adapter`
+# Guance Electron Native Adapter
 
-CloudCare's Electron Native Adapter connects the Browser RUM SDK running in an Electron Renderer to a CloudCare Native SDK on macOS and Windows.
+Guance Electron Native Adapter connects the Browser RUM SDK running in an Electron Renderer to the Guance Native SDK on macOS and Windows.
 
 This CommonJS adapter is one npm package. npm installation downloads the current platform's runtime from its Native SDK GitHub Release by default. A supplied offline SDK archive takes precedence over downloading. In managed mode Electron owns the Native SDK; in external mode the native host owns it.
 
