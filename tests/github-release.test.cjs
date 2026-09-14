@@ -47,6 +47,77 @@ test("publication retry accepts only identical npm bytes and repairs the request
   }), /E403/);
 });
 
+test("a successful upload retries registry visibility without publishing twice", async (t) => {
+  const f = fixture(t);
+  const calls = [];
+  const waits = [];
+  let views = 0;
+  const result = await publishRelease({ ...OPTIONS, directory: f.root, execute: true }, {
+    log() {}, wait: async (ms) => waits.push(ms),
+    runNpm: async (args) => {
+      calls.push(args);
+      if (args[0] === "view" && ++views <= 3) throw new Error("npm view failed (1): npm error code E404");
+      return JSON.stringify(f.report.package.integrity);
+    },
+  });
+  assert.equal(result.published, true);
+  assert.deepEqual(calls.map((args) => args[0]), ["view", "publish", "view", "view", "view"]);
+  assert.deepEqual(waits, [1000, 2000]);
+  assert.ok(calls.filter((args) => args[0] === "view").every((args) => args.includes("--prefer-online")));
+});
+
+test("persistent post-upload E404 reports verification failure and stops retrying", async (t) => {
+  const f = fixture(t);
+  const calls = [];
+  const waits = [];
+  const logs = [];
+  await assert.rejects(publishRelease({ ...OPTIONS, directory: f.root, execute: true }, {
+    log: (message) => logs.push(message), wait: async (ms) => waits.push(ms),
+    runNpm: async (args) => {
+      calls.push(args[0]);
+      if (args[0] === "view") throw new Error("npm E404 not found");
+      return "upload completed";
+    },
+  }), /Registry verification failed.*--verify-only[\s\S]*E404/);
+  assert.equal(calls.filter((name) => name === "publish").length, 1);
+  assert.equal(calls.filter((name) => name === "view").length, 7);
+  assert.deepEqual(waits, [1000, 2000, 4000, 8000, 15000]);
+  assert.ok(logs.some((message) => message.startsWith("npm publish completed")));
+  assert.ok(!logs.some((message) => message.startsWith("Published and verified")));
+});
+
+test("verify-only checks existing bytes without uploading or changing dist-tags", async (t) => {
+  const f = fixture(t);
+  const calls = [];
+  const dependencies = { log() {}, runNpm: async (args) => {
+    calls.push(args[0]);
+    return JSON.stringify(f.report.package.integrity);
+  } };
+  assert.deepEqual(await publishRelease({ ...OPTIONS, directory: f.root, verifyOnly: true }, dependencies),
+    { published: false, verified: true });
+  assert.deepEqual(calls, ["view"]);
+  await assert.rejects(publishRelease({ ...OPTIONS, directory: f.root, verifyOnly: true, execute: true }, dependencies), /cannot be combined/);
+  assert.deepEqual(calls, ["view"]);
+});
+
+test("post-upload integrity mismatch and authorization errors do not trigger retries", async (t) => {
+  const f = fixture(t);
+  for (const failure of ["mismatch", "forbidden"]) {
+    const calls = [];
+    await assert.rejects(publishRelease({ ...OPTIONS, directory: f.root, execute: true }, {
+      log() {}, wait: async () => assert.fail("Unexpected retry"),
+      runNpm: async (args) => {
+        calls.push(args[0]);
+        if (calls.length === 1) throw new Error("npm E404 not found");
+        if (args[0] === "publish") return "upload completed";
+        if (failure === "forbidden") throw new Error("npm E403 forbidden");
+        return JSON.stringify("sha512-different");
+      },
+    }), failure === "forbidden" ? /Registry verification failed[\s\S]*E403/ : /integrity differs/);
+    assert.deepEqual(calls, ["view", "publish", "view"]);
+  }
+});
+
 test("release validation rejects dirty provenance, old reports, tampering and metadata divergence", (t) => {
   const f = fixture(t);
   readReleaseArtifact(f.root);

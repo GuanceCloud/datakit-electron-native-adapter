@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-alpha.3
+
+- Pin default Native SDK downloads to macOS `1.6.8-alpha.6` and Windows `vcpkg_0.1.0-alpha.8` for normal npm installation.
+- Support Windows x64, x86 (Node/Electron `ia32`), and arm64 runtime selection, validation, and staging; cross-architecture packaging requires an explicit target architecture.
+- Retry temporary npm registry `E404` responses after publication and support `--verify-only` to verify an existing upload without publishing again.
 
 - Derive Windows runtime Release filenames from SDK versions and accept native `nuget_` / `vcpkg_` release tags while preserving their URL spelling.
 - Preserve configured Windows settings when overriding only the SDK tag or asset name during npm packing.

@@ -59,6 +59,8 @@ Installing a published npm package runs postinstall and downloads the current pl
 
 The npm, Apple SDK and Windows SDK versions are independent. Release packages carry fixed per-platform SDK tags in `package.json.nativeRuntime`; no `latest` lookup is used. Private source checkouts and unsupported hosts skip automatic installation. A download or validation failure on a supported host fails npm installation.
 
+Version `0.1.0-alpha.3` defaults to macOS SDK `1.6.8-alpha.6` (Universal) and Windows SDK `vcpkg_0.1.0-alpha.8` (x64, x86, and arm64).
+
 ### Default npm installation
 
 ```sh
@@ -143,7 +145,7 @@ Packing requires fixed SDK tags, but no native archives, descriptors or network 
 
 `verify:release` installs the actual npm tarball (including default postinstall), then checks CLI help and adapter import. Add `--skip-runtime` explicitly to test only the npm pipeline. It may download normal npm dependencies; `--offline` controls npm's cache, not the SDK downloader. To prevent SDK network access, supply `GUANCE_NATIVE_RUNTIME_ARCHIVE` or use `--skip-runtime`. This verifier does not execute native binaries or establish Native SDK runtime compatibility.
 
-Without `--execute`, `publish:release` only validates local package metadata, provenance and integrity. Append `--execute` to publish that exact tarball. SDK URLs are not a prerequisite; the old `--local-only` flag is accepted but no longer changes this behavior. The helper rejects prereleases tagged `latest`, checks existing npm integrity before retrying, and verifies npm integrity after publication.
+By default, `publish:release` only validates local package metadata, provenance and integrity. Append `--execute` to publish that exact tarball. SDK URLs are not a prerequisite; the old `--local-only` flag is accepted but no longer changes this behavior. The helper rejects prereleases tagged `latest`, checks existing npm integrity before retrying, and verifies npm integrity after publication. After a successful upload, registry `E404` responses are retried up to five times with increasing delays. If verification still fails, keep the original artifacts and replace `--execute` with `--verify-only` to check the existing version's integrity without uploading or changing dist-tags. Upload success and registry verification are reported separately; a verification failure does not establish that the upload failed.
 
 For an alpha intended only to validate the npm pipeline, use `pack:release --pipeline-only` instead of the SDK defaults if those versions are not known, and `verify:release --skip-runtime`. This exception is restricted to prerelease versions. The resulting package retains postinstall; consumers must explicitly set `GUANCE_NATIVE_SKIP_DOWNLOAD=1` or supply the missing SDK settings. It does not silently disable the default behavior. Such an alpha can be published before Native SDK assets are ready. This does not establish that managed mode works: test remote and offline installation plus native/Electron behavior separately on each supported platform before declaring a version integration-ready.
 

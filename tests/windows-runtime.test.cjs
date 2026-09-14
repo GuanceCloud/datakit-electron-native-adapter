@@ -48,10 +48,10 @@ for (const arch of ["x64", "x86", "arm64"]) {
 test("default package resolution validates native bytes and stages complete runtime outside ASAR", (t) => {
   const f = fixture(t);
   assert.equal(resolveWindowsRuntime({ ...f, resourcesPath: null, arch: "x64" }), f.runtime);
-  const destination = stageWindowsRuntime({ nativeDirectory: f.runtime, resourcesDirectory: path.join(f.root, "resources") });
+  const destination = stageWindowsRuntime({ nativeDirectory: f.runtime, resourcesDirectory: path.join(f.root, "resources"), arch: "x64" });
   assert.deepEqual(fs.readFileSync(path.join(destination, RUNTIME_FILES[0])), fs.readFileSync(path.join(f.runtime, RUNTIME_FILES[0])));
   assert.equal(resolveWindowsRuntime({ resourcesPath: path.dirname(destination), arch: "x64", packageRoot: f.root }), destination);
-  assert.throws(() => stageWindowsRuntime({ nativeDirectory: f.runtime, resourcesDirectory: path.join(f.root, "app.asar/resources") }), /outside ASAR/);
+  assert.throws(() => stageWindowsRuntime({ nativeDirectory: f.runtime, resourcesDirectory: path.join(f.root, "app.asar/resources"), arch: "x64" }), /outside ASAR/);
 });
 
 test("bad explicit override never falls back and missing bundle/unsupported architecture are actionable", (t) => {

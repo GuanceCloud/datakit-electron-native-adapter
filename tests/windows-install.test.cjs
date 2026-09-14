@@ -75,7 +75,7 @@ test("Windows online and offline installers consume the same SDK archive", async
     options: { sdkVersion, target: "win32-x64", runtimeArchive: f.archive },
     fetchImpl() { throw Error("Offline installation must never use the network"); } });
   for (const name of fs.readdirSync(output)) assert.deepEqual(fs.readFileSync(path.join(output, name)), fs.readFileSync(path.join(offline, name)));
-  const staged = stageWindowsRuntime({ resourcesDirectory: path.join(f.root, "resources"), nativeDirectory: offline });
+  const staged = stageWindowsRuntime({ resourcesDirectory: path.join(f.root, "resources"), nativeDirectory: offline, arch: "x64" });
   assert.ok(fs.existsSync(path.join(staged, "LICENSE")));
   assert.equal(JSON.parse(fs.readFileSync(path.join(staged, "runtime-manifest.json"))).npmPackageVersion, undefined);
 });
